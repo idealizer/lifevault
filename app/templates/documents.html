@@ -15,7 +15,11 @@
       <strong>{{ job.packet_path.split('-', 2)[-1] if job.packet_path else (job.label or 'Asset') }}</strong>
       <p class="muted">{{ job.provider }} · {{ job.action }}</p>
     </div>
+    {% if job.packet_path %}
+    <span class="pill status-{{ job.reply_status or 'awaiting' }}">{% if job.reply_status == 'received' %}Response received{% else %}Awaiting response{% endif %}</span>
+    {% else %}
     <span class="pill status-{{ job.status }}">{{ job.status }}</span>
+    {% endif %}
     {% if job.packet_path %}
     <a class="btn icon" href="/documents/{{ job.id }}" aria-label="View" title="View">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/></svg>

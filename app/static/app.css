@@ -51,7 +51,9 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   align-items: center;
   gap: 16px;
   padding: 18px 0;
+  flex-wrap: wrap;
 }
+nav { flex-wrap: wrap; }
 .brand, nav { display: flex; align-items: center; gap: 10px; }
 .brand { text-decoration: none; font-weight: 650; letter-spacing: 0.01em; font-size: 1.15rem; }
 .brand svg { width: 32px; height: 32px; }
@@ -128,6 +130,10 @@ input[type="file"] {
 .pill.on, .status-confirmed, .conf.high { background: var(--success); color: #fff; }
 html.dark .pill.on, html.dark .status-confirmed, html.dark .conf.high { color: #14241c; }
 .status-error, .conf.low { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+.status-awaiting { background: var(--alert); color: #fff; }
+html.dark .status-awaiting { color: #1a140c; }
+.status-received { background: var(--success); color: #fff; }
+html.dark .status-received { color: #14241c; }
 .status-running, .status-queued, .status-stopping, .conf.mid, .status-candidate { background: transparent; color: var(--alert); border: 1px solid var(--alert); }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }
 .muted, .fine, q { color: var(--muted); }
@@ -193,6 +199,11 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .assets { list-style: none; padding: 0; margin: 0; gap: 8px; }
 .asset { display: flex; align-items: center; gap: 12px; padding: 8px 12px; cursor: pointer; }
 .asset:hover { border-color: var(--accent); }
+#step-dialog { width: min(520px, calc(100% - 32px)); }
+.step-options { display: grid; gap: 4px; max-height: 280px; overflow: auto; }
+.step-choice { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.step-choice input[type="checkbox"] { width: 20px; height: 20px; flex: none; }
+.step-choice input[type="text"] { flex: 1; min-width: 0; }
 .step-history { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .step-history li { display: flex; align-items: center; gap: 8px; }
 .step-history a { margin-left: auto; }
@@ -217,6 +228,12 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .documents li div { flex: 1; min-width: 0; }
 .documents li p { margin: 0; }
 .documents .btn.icon { flex: none; border-radius: 999px; }
+.vault-gate { max-width: 420px; }
+.secret { font-family: ui-monospace, monospace; min-width: 8ch; }
+.credential-list, #credential-list { align-items: center; }
+#credential-list .secret { margin-left: auto; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#credential-dialog { width: min(480px, calc(100% - 32px)); }
+#credential-dialog textarea, #credential-dialog input, #credential-dialog select { width: 100%; box-sizing: border-box; }
 .pdf-pages { display: grid; gap: 16px; }
 .pdf-pages canvas { width: 100%; height: auto; background: #fff; border-radius: 12px; box-shadow: var(--shadow); }
 .banner { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--pill); color: var(--pill-text); }

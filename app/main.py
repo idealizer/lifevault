@@ -41,6 +41,7 @@ from app.db import (
     mask_secret,
     save_action_choice,
     set_finding_status,
+    set_job_reply,
     set_setting,
     setting,
     update_run,
@@ -49,9 +50,13 @@ from app.db import (
 from app.llm.client import resolve_llm
 from app.pipeline.estate_actions import ESTATE_ACTIONS, actions_for
 from app.pipeline.import_mail import ImportError, parse_mail_file
-from app.pipeline.letters import estate_file, save_estate_file
+from app.pipeline.letters import estate_file, reply_path, save_estate_file, save_reply_file
 from app.pipeline.queue import start_queue
 from app.pipeline.scan import backfill_signals, execute_scan, message_body, window_start
+from app.vault_store import KINDS, VaultError, counts as vault_counts
+from app.vault_store import delete_entry, list_entries, lock as vault_lock
+from app.vault_store import save_entry, setup as vault_setup, unlock as vault_unlock
+from app.vault_store import unlocked as vault_unlocked, vault_ready
 
 ROOT = Path(__file__).resolve().parents[1]
 templates = Jinja2Templates(directory=str(ROOT / "app" / "templates"))
@@ -108,7 +113,7 @@ def _vault_context(status: str, category: str) -> dict:
         "total": len(findings),
         "risks": len(grouped.get("risks", [])),
         "scanning": has_active_run(),
-        "page": "vault",
+        "page": "assets",
         "estate_actions": ESTATE_ACTIONS,
     }
 
@@ -116,6 +121,92 @@ def _vault_context(status: str, category: str) -> dict:
 @app.get("/")
 def vault(request: Request, status: str = "active", category: str = ""):
     return _render(request, "vault.html", **_vault_context(status, category))
+
+
+@app.get("/vault")
+def credentials_page(request: Request, kind: str = ""):
+    selected = kind if kind in {row["key"] for row in KINDS} else ""
+    open_vault = vault_unlocked()
+    return _render(
+        request,
+        "credentials.html",
+        page="vault",
+        ready=vault_ready(),
+        unlocked=open_vault,
+        kinds=KINDS,
+        kind=selected,
+        counts=vault_counts() if open_vault else {},
+        total=sum(vault_counts().values()) if open_vault else 0,
+        entries=list_entries(selected) if open_vault else [],
+    )
+
+
+@app.post("/vault/setup")
+def credentials_setup(password: str = Form(""), confirm: str = Form("")):
+    try:
+        vault_setup(password, confirm)
+    except VaultError as exc:
+        return _redirect("/vault", str(exc), "error")
+    return _redirect("/vault", "Vault ready.")
+
+
+@app.post("/vault/unlock")
+def credentials_unlock(password: str = Form("")):
+    if not vault_unlock(password):
+        return _redirect("/vault", "That password did not open the vault.", "error")
+    return _redirect("/vault", "Vault unlocked.")
+
+
+@app.post("/vault/lock")
+def credentials_lock():
+    vault_lock()
+    return _redirect("/vault", "Vault locked.")
+
+
+@app.post("/vault/entries")
+def credentials_save(
+    kind: str = Form(""),
+    entry_id: str = Form(""),
+    title: str = Form(""),
+    url: str = Form(""),
+    username: str = Form(""),
+    password: str = Form(""),
+    network: str = Form(""),
+    bank: str = Form(""),
+    user_id: str = Form(""),
+    holder: str = Form(""),
+    address: str = Form(""),
+    secret: str = Form(""),
+    notes: str = Form(""),
+):
+    fields = {
+        "title": title,
+        "url": url,
+        "username": username,
+        "password": password,
+        "network": network,
+        "bank": bank,
+        "user_id": user_id,
+        "holder": holder,
+        "address": address,
+        "secret": secret,
+        "notes": notes,
+    }
+    try:
+        number = int(entry_id) if entry_id.strip().isdigit() else None
+        save_entry(kind, fields, number)
+    except VaultError as exc:
+        return _redirect("/vault", str(exc), "error")
+    return _redirect("/vault?kind=" + kind, "Saved.")
+
+
+@app.post("/vault/entries/{entry_id}/delete")
+def credentials_delete(entry_id: int):
+    try:
+        delete_entry(entry_id)
+    except VaultError as exc:
+        return _redirect("/vault", str(exc), "error")
+    return _redirect("/vault", "Removed.")
 
 
 @app.get("/actions")
@@ -142,7 +233,50 @@ def document_page(request: Request, job_id: int):
         page="documents",
         job=job,
         filename=path.name.split("-", 2)[-1],
+        reply_status=job.get("reply_status") or "awaiting",
+        reply_name=Path(job.get("reply_file") or "").name,
     )
+
+
+@app.post("/documents/{job_id}/reply")
+async def document_reply(
+    job_id: int,
+    reply_status: str = Form("awaiting"),
+    reply_note: str = Form(""),
+    reply_file: UploadFile | None = File(None),
+):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(404, "That document is not ready.")
+    status = "received" if reply_status == "received" else "awaiting"
+    note = reply_note.strip()
+    stored = None
+    try:
+        if reply_file and reply_file.filename:
+            stored = save_reply_file(job_id, reply_file.filename, await reply_file.read())
+    except ValueError as exc:
+        return _redirect(f"/documents/{job_id}", str(exc), "error")
+    has_file = bool(stored or job.get("reply_file"))
+    if status == "received" and not has_file and not note:
+        return _redirect(
+            f"/documents/{job_id}",
+            "Add the response file or a note before marking it received.",
+            "error",
+        )
+    set_job_reply(job_id, status, note, stored)
+    return _redirect(f"/documents/{job_id}", "Status saved.")
+
+
+@app.get("/documents/{job_id}/reply-file")
+def document_reply_file(job_id: int):
+    job = get_job(job_id)
+    path = reply_path((job or {}).get("reply_file") or "")
+    if not path:
+        raise HTTPException(404, "No response file is stored.")
+    media = "application/pdf" if path.suffix.lower() == ".pdf" else "image/" + path.suffix.lower().lstrip(".")
+    if path.suffix.lower() in {".jpg", ".jpeg"}:
+        media = "image/jpeg"
+    return FileResponse(path, media_type=media, content_disposition_type="inline", filename=path.name)
 
 
 @app.get("/queue.json")
@@ -163,6 +297,7 @@ def queue_json():
                 "created": (job.get("created_at") or "")[:16].replace("T", " "),
                 "filename": filename,
                 "ready": bool(packet),
+                "reply_status": job.get("reply_status") or "awaiting",
             }
         )
     return {"jobs": rows}
@@ -190,23 +325,30 @@ def queue_packet(job_id: int, inline: int = 0):
 
 
 @app.post("/findings/{finding_id}/queue")
-def queue_finding(finding_id: int, action: str = Form(""), note: str = Form("")):
+def queue_finding(
+    finding_id: int,
+    action: list[str] = Form(default=[]),
+    note: list[str] = Form(default=[]),
+):
     rows = [row for row in list_findings("all") if row["id"] == finding_id]
     if not rows:
         raise HTTPException(404, "That asset is not in the vault.")
     options = actions_for(rows[0]["category"])
-    custom = note.strip()
-    picked = action.strip()
-    if custom:
-        chosen = custom
-    elif picked in options:
-        chosen = picked
-    else:
+    chosen = []
+    for item in action:
+        text = item.strip()
+        if text in options and text not in chosen:
+            chosen.append(text)
+    for item in note:
+        text = item.strip()
+        if text and text not in chosen:
+            chosen.append(text)
+    if not chosen:
         raise HTTPException(400, "Choose a listed step or write your own.")
     set_finding_status(finding_id, "confirmed")
-    save_action_choice(finding_id, chosen, custom)
-    job_id = enqueue_job(finding_id, chosen)
-    return {"ok": True, "status": "confirmed", "job_id": job_id, "counts": finding_counts()}
+    save_action_choice(finding_id, chosen[0], " · ".join(chosen[1:])[:500])
+    job_ids = [enqueue_job(finding_id, item) for item in chosen]
+    return {"ok": True, "status": "confirmed", "job_id": job_ids[0], "job_ids": job_ids, "counts": finding_counts()}
 
 
 @app.get("/inventory")

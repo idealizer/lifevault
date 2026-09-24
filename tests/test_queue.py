@@ -1,7 +1,9 @@
+from fastapi.testclient import TestClient
 from fpdf import FPDF
 from pypdf import PdfReader
 
 from app.db import enqueue_job, get_job, init_db, save_finding, set_setting
+from app.main import app
 from app.pipeline.letter_copy import compose, detect_language
 from app.pipeline.letters import estate_file, needs_letter, packet_filename, save_estate_file
 from app.pipeline.queue import run_job
@@ -67,6 +69,43 @@ def test_transfer_letter_names_estate_account():
     assert "Estate Bank" in text
     assert "CH00 0000 0000 0000 0000 0" in text
     assert "EXAMPLESW" in text
+
+
+def test_response_received_needs_a_note_or_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("LIFE_DB", str(tmp_path / "life.db"))
+    init_db()
+    finding_id = save_finding(
+        {
+            "category": "subscriptions",
+            "provider": "Example News",
+            "asset_kind": "subscription",
+            "label": "Example News",
+            "identifiers": [],
+            "confidence": 0.8,
+            "status": "confirmed",
+            "merge_key": "subscriptions|examplenews|reply",
+        },
+        [],
+    )
+    job_id = enqueue_job(finding_id, "Cancel the subscription")
+    client = TestClient(app)
+    blocked = client.post(
+        f"/documents/{job_id}/reply",
+        data={"reply_status": "received", "reply_note": "  "},
+        follow_redirects=False,
+    )
+    assert blocked.status_code == 303
+    assert "note" in blocked.headers["location"]
+    assert get_job(job_id).get("reply_status") in ("", "awaiting", None)
+    saved = client.post(
+        f"/documents/{job_id}/reply",
+        data={"reply_status": "received", "reply_note": "They confirmed by phone."},
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    done = get_job(job_id)
+    assert done["reply_status"] == "received"
+    assert "phone" in done["reply_note"]
 
 
 def test_letter_follows_source_language():

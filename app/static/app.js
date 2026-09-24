@@ -153,20 +153,48 @@ function estateActions() {
   }
 }
 
+function stepChoice(value) {
+  const label = document.createElement("label");
+  label.className = "step-choice";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.name = "action";
+  box.value = value;
+  const text = document.createElement("span");
+  text.textContent = value;
+  label.append(box, text);
+  return label;
+}
+
+function customStepRow() {
+  const label = document.createElement("label");
+  label.className = "step-choice";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.className = "js-custom-check";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Your own step";
+  input.addEventListener("input", () => {
+    const rows = document.querySelectorAll("#step-custom .step-choice");
+    const last = rows[rows.length - 1];
+    if (label === last && input.value.trim()) customStepRow();
+  });
+  label.append(box, input);
+  document.getElementById("step-custom").appendChild(label);
+  return label;
+}
+
 function openStepDialog(card) {
   const dialog = document.getElementById("step-dialog");
-  const select = document.getElementById("step-action");
   const options = estateActions()[card.dataset.category] || estateActions().other || [];
   document.getElementById("step-title").textContent = card.dataset.status === "confirmed" ? "Add a step" : "Next step";
   document.getElementById("step-asset").textContent = card.querySelector("strong").textContent;
-  document.getElementById("step-note").value = "";
-  select.replaceChildren();
-  options.forEach((action) => {
-    const option = document.createElement("option");
-    option.value = action;
-    option.textContent = action;
-    select.appendChild(option);
-  });
+  const list = document.getElementById("step-options");
+  list.replaceChildren();
+  options.forEach((action) => list.appendChild(stepChoice(action)));
+  document.getElementById("step-custom").replaceChildren();
+  customStepRow();
   dialog.dataset.finding = card.dataset.finding;
   paintStepHistory([]);
   dialog.showModal();
@@ -227,8 +255,14 @@ function paintQueue(jobs) {
     const text = document.createElement("div");
     text.append(title, detail);
     const pill = document.createElement("span");
-    pill.className = "pill status-" + job.status;
-    pill.textContent = job.status;
+    if (job.ready) {
+      const received = job.reply_status === "received";
+      pill.className = "pill status-" + (received ? "received" : "awaiting");
+      pill.textContent = received ? "Response received" : "Awaiting response";
+    } else {
+      pill.className = "pill status-" + job.status;
+      pill.textContent = job.status;
+    }
     item.append(text, pill);
     if (job.ready) {
       item.appendChild(iconLink("View", "/documents/" + job.id, "view"));
@@ -259,6 +293,14 @@ function bindStepDialog() {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const card = document.querySelector('.asset[data-finding="' + dialog.dataset.finding + '"]');
+    document.querySelectorAll("#step-custom .step-choice").forEach((row) => {
+      const input = row.querySelector("input[type='text']");
+      const box = row.querySelector(".js-custom-check");
+      input.removeAttribute("name");
+      if (box.checked && input.value.trim()) {
+        input.name = "note";
+      }
+    });
     const body = new FormData(form);
     fetch("/findings/" + dialog.dataset.finding + "/queue", { method: "POST", body: body })
       .then((response) => {
@@ -283,7 +325,11 @@ function bindStepDialog() {
             setCount("all", data.counts.all);
           }
         }
-        document.getElementById("step-note").value = "";
+        document.querySelectorAll("#step-options input").forEach((box) => {
+          box.checked = false;
+        });
+        document.getElementById("step-custom").replaceChildren();
+        customStepRow();
         loadStepHistory(dialog.dataset.finding);
         showToast("Queued", "success");
         pollQueue();
@@ -447,6 +493,94 @@ function renderPdf() {
   }).catch(() => showToast("Could not open that document", "error"));
 }
 
+function bindCredentials() {
+  const dialog = document.getElementById("credential-dialog");
+  const form = document.getElementById("credential-form");
+  if (!dialog || !form) return;
+  const kindSelect = document.getElementById("credential-kind");
+  const showKind = () => {
+    document.querySelectorAll(".credential-field").forEach((label) => {
+      const on = label.dataset.kind === kindSelect.value;
+      label.hidden = !on;
+      label.querySelectorAll("input, textarea").forEach((input) => {
+        input.disabled = !on;
+      });
+    });
+  };
+  kindSelect.addEventListener("change", showKind);
+  showKind();
+  document.getElementById("credential-close").addEventListener("click", () => dialog.close());
+  document.getElementById("credential-add").addEventListener("click", () => {
+    form.reset();
+    document.getElementById("credential-id").value = "";
+    document.getElementById("credential-title").textContent = "Add a secret";
+    showKind();
+    dialog.showModal();
+  });
+  document.querySelectorAll(".js-reveal").forEach((button) => {
+    button.addEventListener("click", () => {
+      const secret = button.parentElement.querySelector(".secret");
+      const shown = secret.dataset.shown === "1";
+      secret.textContent = shown ? "••••••••" : (secret.dataset.secret || "");
+      secret.dataset.shown = shown ? "" : "1";
+      button.setAttribute("aria-label", shown ? "Show secret" : "Hide secret");
+    });
+  });
+  document.querySelectorAll(".js-copy").forEach((button) => {
+    button.addEventListener("click", () => {
+      const secret = button.parentElement.querySelector(".secret");
+      const value = secret.dataset.secret || "";
+      if (!value || !navigator.clipboard) {
+        showToast("Nothing to copy", "alert");
+        return;
+      }
+      navigator.clipboard.writeText(value).then(
+        () => showToast("Copied", "success"),
+        () => showToast("Could not copy", "error")
+      );
+    });
+  });
+  document.querySelectorAll(".js-edit").forEach((button) => {
+    button.addEventListener("click", () => {
+      form.reset();
+      const fields = JSON.parse(button.dataset.fields || "{}");
+      document.getElementById("credential-id").value = button.dataset.id;
+      kindSelect.value = button.dataset.kind;
+      document.getElementById("credential-title").textContent = "Edit secret";
+      showKind();
+      Object.entries(fields).forEach(([name, value]) => {
+        form.querySelectorAll("[name='" + name + "']").forEach((input) => {
+          if (!input.disabled) input.value = value;
+        });
+      });
+      dialog.showModal();
+    });
+  });
+}
+
+function bindReplyStatus() {
+  const form = document.getElementById("reply-form");
+  const select = document.getElementById("reply-status");
+  const extra = document.getElementById("reply-extra");
+  if (!form || !select || !extra) return;
+  const toggle = () => {
+    extra.hidden = select.value !== "received";
+  };
+  select.addEventListener("change", toggle);
+  form.addEventListener("submit", (event) => {
+    if (select.value !== "received") return;
+    const note = (form.querySelector("[name='reply_note']").value || "").trim();
+    const file = form.querySelector("[name='reply_file']").files;
+    const hasFile = form.dataset.hasFile === "1" || (file && file.length);
+    if (!note && !hasFile) {
+      event.preventDefault();
+      showToast("Add the response file or a note before marking it received.", "error");
+    }
+  });
+}
+
+bindReplyStatus();
+bindCredentials();
 bindStepDialog();
 bindFileNames();
 pollQueue();

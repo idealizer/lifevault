@@ -10,6 +10,32 @@
   <a class="btn icon" href="/queue/{{ job.id }}/packet" aria-label="Download" title="Download">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>
   </a>
+  <span class="pill status-{{ reply_status }}">{% if reply_status == 'received' %}Response received{% else %}Awaiting response{% endif %}</span>
+</section>
+<section class="panel stack" id="reply-panel">
+  <h2>Response</h2>
+  <form method="post" action="/documents/{{ job.id }}/reply" enctype="multipart/form-data" class="stack" id="reply-form" data-has-file="{{ '1' if reply_name else '' }}">
+    <label>Status
+      <select name="reply_status" id="reply-status">
+        <option value="awaiting" {% if reply_status != 'received' %}selected{% endif %}>Awaiting response</option>
+        <option value="received" {% if reply_status == 'received' %}selected{% endif %}>Response received</option>
+      </select>
+    </label>
+    <div id="reply-extra" {% if reply_status != 'received' %}hidden{% endif %}>
+      <p class="muted">Upload the reply, or paste what was said. One of the two is required.</p>
+      <label>Response file
+        {% if reply_name %}<span class="pill">Saved: {{ reply_name }}</span>{% endif %}
+        <input type="file" name="reply_file" accept="application/pdf,.pdf,image/png,image/jpeg">
+      </label>
+      <label>Note
+        <textarea name="reply_note" rows="4" placeholder="Paste the reply, or note what was discussed">{{ job.reply_note or '' }}</textarea>
+      </label>
+    </div>
+    <button class="btn primary" type="submit">Save status</button>
+  </form>
+  {% if reply_name %}
+  <p><a href="/documents/{{ job.id }}/reply-file">Open the uploaded response</a></p>
+  {% endif %}
 </section>
 <div id="pdf-pages" class="pdf-pages" data-src="/documents/{{ job.id }}/{{ filename }}"></div>
 <script src="/static/pdf.min.js"></script>

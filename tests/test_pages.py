@@ -34,7 +34,7 @@ def test_pages_render():
     mailboxes = client.get("/mailboxes")
     settings = client.get("/settings")
     assert home.status_code == 200
-    assert "Vault" in home.text
+    assert "Assets" in home.text
     assert "Example current account" in home.text
     assert mailboxes.status_code == 200
     assert "Connect IMAP" in mailboxes.text

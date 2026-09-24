@@ -141,6 +141,25 @@ def _ensure_message_columns(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    job_columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    if "reply_status" not in job_columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN reply_status TEXT NOT NULL DEFAULT 'awaiting'")
+    if "reply_note" not in job_columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN reply_note TEXT NOT NULL DEFAULT ''")
+    if "reply_file" not in job_columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN reply_file TEXT NOT NULL DEFAULT ''")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS credentials (
+            id INTEGER PRIMARY KEY,
+            kind TEXT NOT NULL,
+            nonce TEXT NOT NULL,
+            ciphertext TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS api_logs (
@@ -819,6 +838,29 @@ def finish_job(job_id: int, status: str, note: str, packet_path: str = "") -> No
                 """,
                 (status, note[:500], packet_path, utc_now(), job_id),
             )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def set_job_reply(job_id: int, reply_status: str, reply_note: str, reply_file: str | None = None) -> None:
+    with _lock:
+        conn = connect()
+        try:
+            if reply_file is None:
+                conn.execute(
+                    "UPDATE jobs SET reply_status = ?, reply_note = ?, updated_at = ? WHERE id = ?",
+                    (reply_status, reply_note[:8000], utc_now(), job_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE jobs
+                    SET reply_status = ?, reply_note = ?, reply_file = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (reply_status, reply_note[:8000], reply_file, utc_now(), job_id),
+                )
             conn.commit()
         finally:
             conn.close()

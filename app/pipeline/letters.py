@@ -61,6 +61,37 @@ def save_estate_file(kind: str, filename: str, raw: bytes) -> None:
     (folder / f"{stem}{suffix}").write_bytes(raw)
 
 
+def save_reply_file(job_id: int, filename: str, raw: bytes) -> str:
+    if not raw:
+        raise ValueError("That file is empty.")
+    suffix = Path(filename or "").suffix.lower()
+    if suffix not in {".pdf", ".png", ".jpg", ".jpeg"}:
+        if raw.startswith(b"%PDF"):
+            suffix = ".pdf"
+        elif raw.startswith(b"\x89PNG"):
+            suffix = ".png"
+        elif raw.startswith(b"\xff\xd8"):
+            suffix = ".jpg"
+        else:
+            raise ValueError("Upload a PDF or image.")
+    if len(raw) > 15_000_000:
+        raise ValueError("That file is larger than 15 MB.")
+    folder = data_dir() / "replies"
+    folder.mkdir(parents=True, exist_ok=True)
+    for old in folder.glob(f"job-{job_id}.*"):
+        old.unlink()
+    name = f"job-{job_id}{suffix}"
+    (folder / name).write_bytes(raw)
+    return name
+
+
+def reply_path(name: str) -> Path | None:
+    if not name:
+        return None
+    path = data_dir() / "replies" / Path(name).name
+    return path if path.is_file() else None
+
+
 def needs_letter(action: str) -> bool:
     text = action.lower()
     quiet = ("do not reply", "ignore", "leave the", "leave it", "record the", "record it", "keep ")
