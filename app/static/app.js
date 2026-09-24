@@ -167,22 +167,22 @@ function stepChoice(value) {
 }
 
 function customStepRow() {
-  const label = document.createElement("label");
-  label.className = "step-choice";
+  const row = document.createElement("div");
+  row.className = "step-choice";
   const box = document.createElement("input");
   box.type = "checkbox";
   box.className = "js-custom-check";
+  box.setAttribute("aria-label", "Select this step");
   const input = document.createElement("input");
   input.type = "text";
   input.placeholder = "Your own step";
   input.addEventListener("input", () => {
     const rows = document.querySelectorAll("#step-custom .step-choice");
-    const last = rows[rows.length - 1];
-    if (label === last && input.value.trim()) customStepRow();
+    if (row === rows[rows.length - 1] && input.value.trim()) customStepRow();
   });
-  label.append(box, input);
-  document.getElementById("step-custom").appendChild(label);
-  return label;
+  row.append(box, input);
+  document.getElementById("step-custom").appendChild(row);
+  return row;
 }
 
 function openStepDialog(card) {

@@ -37,18 +37,21 @@
   <footer class="fine">Runs on this machine. Only screened excerpts are sent to the selected model.</footer>
   <div id="toasts" aria-live="polite"></div>
   <dialog id="step-dialog">
-    <form id="step-form" class="stack">
+    <form id="step-form" class="step-form">
       <div class="dialog-head">
         <h2 id="step-title">Next step</h2>
         <button type="button" class="btn icon" id="step-close" aria-label="Close">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
       </div>
-      <p id="step-asset" class="muted"></p>
-      <ul id="step-history" class="step-history"></ul>
-      <div id="step-options" class="step-options"></div>
-      <div id="step-custom" class="step-options"></div>
-      <div class="row">
+      <div class="step-body">
+        <p id="step-asset" class="muted"></p>
+        <ul id="step-history" class="step-history"></ul>
+        <div id="step-options" class="step-options"></div>
+        <p class="kicker">Your own steps</p>
+        <div id="step-custom" class="step-options"></div>
+      </div>
+      <div class="step-foot">
         <button type="button" class="btn" id="step-cancel">Close</button>
         <button type="submit" class="btn primary">Queue selected</button>
       </div>

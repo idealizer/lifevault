@@ -34,6 +34,7 @@ html.dark {
   --focus: #9dceb4;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   font-family: "Segoe UI", Candara, sans-serif;
@@ -199,11 +200,30 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .assets { list-style: none; padding: 0; margin: 0; gap: 8px; }
 .asset { display: flex; align-items: center; gap: 12px; padding: 8px 12px; cursor: pointer; }
 .asset:hover { border-color: var(--accent); }
-#step-dialog { width: min(520px, calc(100% - 32px)); }
-.step-options { display: grid; gap: 4px; max-height: 280px; overflow: auto; }
-.step-choice { display: flex; align-items: center; gap: 10px; min-height: 44px; }
-.step-choice input[type="checkbox"] { width: 20px; height: 20px; flex: none; }
-.step-choice input[type="text"] { flex: 1; min-width: 0; }
+#step-dialog {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  padding: 0;
+  overflow: hidden;
+}
+.step-form { display: flex; flex-direction: column; max-height: calc(100vh - 64px); }
+.step-form .dialog-head { padding: 16px 16px 0; }
+.step-body { overflow: auto; display: grid; gap: 10px; padding: 12px 16px; min-height: 0; }
+.step-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--border); }
+.step-options { display: grid; gap: 6px; }
+#step-dialog .step-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+#step-dialog .step-choice input[type="checkbox"] { width: 20px; height: 20px; min-height: 20px; flex: none; margin: 0; }
+#step-dialog .step-choice span { line-height: 1.3; }
+#step-dialog .step-choice input[type="text"] { flex: 1; width: auto; min-width: 0; min-height: 40px; }
 .step-history { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .step-history li { display: flex; align-items: center; gap: 8px; }
 .step-history a { margin-left: auto; }
