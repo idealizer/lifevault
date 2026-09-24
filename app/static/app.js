@@ -164,17 +164,21 @@ function paintQueue(jobs) {
     const item = document.createElement("li");
     item.dataset.job = String(job.id);
     const title = document.createElement("strong");
-    title.textContent = job.label;
-    const action = document.createElement("span");
-    action.textContent = job.action;
+    title.textContent = job.filename || job.label;
+    const detail = document.createElement("p");
+    detail.className = "muted";
+    detail.textContent = [job.provider, job.action].filter(Boolean).join(" · ");
+    const text = document.createElement("div");
+    text.append(title, detail);
     const pill = document.createElement("span");
     pill.className = "pill status-" + job.status;
     pill.textContent = job.status;
-    item.append(title, action, pill);
+    item.append(text, pill);
     if (job.ready) {
       const link = document.createElement("a");
+      link.className = "btn";
       link.href = "/queue/" + job.id + "/packet";
-      link.textContent = "Download packet";
+      link.textContent = "Download";
       item.appendChild(link);
     }
     list.appendChild(item);

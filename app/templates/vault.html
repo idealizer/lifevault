@@ -23,25 +23,10 @@
 
 <div class="filters">
   {% for key, label in [('active','Active'), ('candidate','Review'), ('confirmed','Confirmed'), ('dismissed','Dismissed'), ('all','All')] %}
-  <a class="pill {% if status == key and not category %}on{% endif %}" href="/?status={{ key }}">{{ label }} <span data-count="{{ key }}">{{ counts[key] }}</span></a>
+  <a class="pill {% if status == key and not category %}on{% endif %}" href="/?status={{ key }}"><span>{{ label }}</span><span class="pill-count" data-count="{{ key }}">{{ counts[key] }}</span></a>
   {% endfor %}
 </div>
 
-<section class="panel" id="queue-panel">
-  <h2>Queue</h2>
-  <ul class="queue" id="queue-list">
-    {% for job in jobs %}
-    <li data-job="{{ job.id }}">
-      <strong>{{ job.label or 'Asset' }}</strong>
-      <span>{{ job.action }}</span>
-      <span class="pill status-{{ job.status }}">{{ job.status }}</span>
-      {% if job.packet_path %}<a href="/queue/{{ job.id }}/packet">Download packet</a>{% endif %}
-    </li>
-    {% else %}
-    <li class="muted" data-empty>Confirmed steps appear here and run in the background.</li>
-    {% endfor %}
-  </ul>
-</section>
 <script type="application/json" id="estate-actions">{{ estate_actions|tojson }}</script>
 
 <nav class="vault-grid" aria-label="Categories">

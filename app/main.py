@@ -107,7 +107,6 @@ def _vault_context(status: str, category: str) -> dict:
         "risks": len(grouped.get("risks", [])),
         "scanning": has_active_run(),
         "page": "vault",
-        "jobs": list_jobs(),
         "estate_actions": ESTATE_ACTIONS,
     }
 
@@ -122,10 +121,17 @@ def actions_page():
     return RedirectResponse("/", status_code=302)
 
 
+@app.get("/documents")
+def documents_page(request: Request):
+    return _render(request, "documents.html", page="documents", jobs=list_jobs())
+
+
 @app.get("/queue.json")
 def queue_json():
     rows = []
     for job in list_jobs():
+        packet = job.get("packet_path") or ""
+        filename = Path(packet).name.split("-", 2)[-1] if packet else ""
         rows.append(
             {
                 "id": job["id"],
@@ -134,7 +140,9 @@ def queue_json():
                 "action": job["action"],
                 "status": job["status"],
                 "note": job["note"],
-                "ready": bool(job.get("packet_path")),
+                "created": (job.get("created_at") or "")[:16].replace("T", " "),
+                "filename": filename,
+                "ready": bool(packet),
             }
         )
     return {"jobs": rows}

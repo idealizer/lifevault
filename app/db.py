@@ -766,7 +766,7 @@ def finish_job(job_id: int, status: str, note: str, packet_path: str = "") -> No
             conn.close()
 
 
-def list_jobs(limit: int = 12) -> list[dict[str, Any]]:
+def list_jobs(limit: int = 200) -> list[dict[str, Any]]:
     with _lock:
         return _rows(
             """

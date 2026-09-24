@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Documents — Lifevault{% endblock %}
+{% block content %}
+<section class="vault-head">
+  <div>
+    <p class="kicker">Executor</p>
+    <h1>Documents</h1>
+    <p class="muted">Letters generated from confirmed assets. Download them again whenever you need them.</p>
+  </div>
+</section>
+<ul class="documents" id="queue-list">
+  {% for job in jobs %}
+  <li data-job="{{ job.id }}">
+    <div>
+      <strong>{{ job.packet_path.split('-', 2)[-1] if job.packet_path else (job.label or 'Asset') }}</strong>
+      <p class="muted">{{ job.provider }} · {{ job.action }}</p>
+    </div>
+    <span class="pill status-{{ job.status }}">{{ job.status }}</span>
+    {% if job.packet_path %}
+    <a class="btn" href="/queue/{{ job.id }}/packet">Download</a>
+    {% endif %}
+  </li>
+  {% else %}
+  <li class="muted">No documents yet. Confirm an asset in the vault and queue a step.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

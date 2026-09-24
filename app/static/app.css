@@ -106,13 +106,23 @@ input[type="file"] {
 .pill {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   min-height: 28px;
-  padding: 0 10px;
+  padding: 0 10px 0 12px;
   border-radius: 999px;
   background: var(--pill);
   color: var(--pill-text);
   text-decoration: none;
   font-size: 0.85rem;
+}
+.pill-count {
+  min-width: 1.6em;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+  line-height: 1.6;
 }
 .pill.on, .status-confirmed, .conf.high { background: var(--success); color: #fff; }
 html.dark .pill.on, html.dark .status-confirmed, html.dark .conf.high { color: #14241c; }
@@ -162,10 +172,10 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 }
 .stats strong, .tile strong { display: block; font-size: 1.7rem; line-height: 1.1; }
 .stats span, .tile span { color: var(--muted); }
-.vault-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
-.tile { min-height: 44px; text-decoration: none; display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 8px 12px; }
+.vault-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; align-items: stretch; }
+.tile { height: 56px; min-height: 56px; box-sizing: border-box; text-decoration: none; display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 8px 12px; }
 .tile svg { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.tile span { color: var(--text); font-size: 0.92rem; }
+.tile span { color: var(--text); font-size: 0.92rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tile strong { display: inline; font-size: 0.95rem; margin-left: auto; }
 .tile.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .tile.empty { opacity: 0.55; }
@@ -183,8 +193,10 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .message-dialog h2 { margin: 0; }
 .message-body { display: grid; gap: 16px; max-height: min(70vh, 640px); overflow: auto; }
 .message-card { display: grid; gap: 6px; }
-.queue { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-.queue li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.documents { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.documents li { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 10px 12px; }
+.documents li div { flex: 1; min-width: 0; }
+.documents li p { margin: 0; }
 .banner { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--pill); color: var(--pill-text); }
 .step { display: grid; gap: 8px; }
 .step-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
