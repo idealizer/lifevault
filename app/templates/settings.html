@@ -4,6 +4,10 @@
 <section class="hero">
   <p class="kicker">Model</p>
   <h1>Settings</h1>
+  <nav class="tabs">
+    <a href="/settings" class="active">Settings</a>
+    <a href="/settings/log">Log</a>
+  </nav>
   <p>Swisscom bearer tokens expire in about 60 minutes. Paste a fresh key here without touching the vault.</p>
 </section>
 <section class="panel">
@@ -48,12 +52,48 @@
         <input name="date_of_death" value="{{ date_of_death }}" placeholder="YYYY-MM-DD">
       </label>
     </div>
+    <p class="muted">These details appear as the sender block on every letter.</p>
+    <label>Company
+      <input name="executor_company" value="{{ executor_company }}">
+    </label>
     <div class="split">
-      <label>Executor name
-        <input name="executor_name" value="{{ executor_name }}">
+      <label>First name
+        <input name="executor_firstname" value="{{ executor_firstname }}">
       </label>
-      <label>Executor address
-        <input name="executor_address" value="{{ executor_address }}">
+      <label>Name
+        <input name="executor_lastname" value="{{ executor_lastname }}">
+      </label>
+    </div>
+    <div class="split">
+      <label>Street
+        <input name="executor_street" value="{{ executor_street }}">
+      </label>
+      <label>Street no.
+        <input name="executor_street_no" value="{{ executor_street_no }}">
+      </label>
+    </div>
+    <div class="split">
+      <label>ZIP
+        <input name="executor_zip" value="{{ executor_zip }}">
+      </label>
+      <label>City
+        <input name="executor_city" value="{{ executor_city }}">
+      </label>
+    </div>
+    <label>Country
+      <input name="executor_country" value="{{ executor_country }}">
+    </label>
+    <h3>Estate account</h3>
+    <p class="muted">Filled into a letter that asks for the balance to be paid to the estate.</p>
+    <label>Bank
+      <input name="estate_bank" value="{{ estate_bank }}">
+    </label>
+    <div class="split">
+      <label>IBAN
+        <input name="estate_iban" value="{{ estate_iban }}" autocomplete="off" spellcheck="false">
+      </label>
+      <label>SWIFT
+        <input name="estate_swift" value="{{ estate_swift }}" autocomplete="off" spellcheck="false">
       </label>
     </div>
     <label>Death certificate

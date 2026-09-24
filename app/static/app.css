@@ -53,7 +53,8 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   padding: 18px 0;
 }
 .brand, nav { display: flex; align-items: center; gap: 10px; }
-.brand { text-decoration: none; font-weight: 650; letter-spacing: 0.01em; }
+.brand { text-decoration: none; font-weight: 650; letter-spacing: 0.01em; font-size: 1.15rem; }
+.brand svg { width: 32px; height: 32px; }
 nav a.active { background: var(--accent); color: var(--accent-text); border-color: transparent; }
 nav a, .btn, #theme-toggle {
   min-height: 44px;
@@ -160,6 +161,16 @@ dialog {
   width: min(420px, calc(100% - 32px));
 }
 dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+.dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dialog-head h2 { margin: 0; }
+.panel h3 { margin: 8px 0 0; font-size: 1rem; }
+.tabs { display: flex; gap: 8px; margin: 12px 0; }
+.tabs a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 16px; border-radius: 999px; border: 1px solid var(--border); text-decoration: none; color: var(--text); }
+.tabs a.active { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.log-call { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 8px 14px 12px; }
+.log-call summary { min-height: 44px; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.log-call summary strong { margin-right: auto; }
+.log-call pre { margin: 0; padding: 12px; overflow: auto; max-height: 420px; white-space: pre-wrap; word-break: break-word; background: var(--bg); color: var(--text); border-radius: 12px; border: 1px solid var(--border); }
 .fine { padding-bottom: 28px; font-size: 0.9rem; }
 .vault-head, .stats { display: flex; justify-content: space-between; gap: 16px; align-items: end; }
 .stats, .vault-grid, .assets { display: grid; gap: 12px; }
@@ -205,6 +216,9 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .documents li { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 10px 12px; }
 .documents li div { flex: 1; min-width: 0; }
 .documents li p { margin: 0; }
+.documents .btn.icon { flex: none; border-radius: 999px; }
+.pdf-pages { display: grid; gap: 16px; }
+.pdf-pages canvas { width: 100%; height: auto; background: #fff; border-radius: 12px; box-shadow: var(--shadow); }
 .banner { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--pill); color: var(--pill-text); }
 .step { display: grid; gap: 8px; }
 .step-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }

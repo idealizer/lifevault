@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from app.db import (
     has_active_run,
     init_db,
     interrupt_stale_runs,
+    list_api_logs,
     list_findings,
     list_jobs,
     list_runs,
@@ -126,6 +128,23 @@ def documents_page(request: Request):
     return _render(request, "documents.html", page="documents", jobs=list_jobs())
 
 
+@app.get("/documents/{job_id}")
+def document_page(request: Request, job_id: int):
+    job = get_job(job_id)
+    if not job or not job.get("packet_path"):
+        raise HTTPException(404, "That document is not ready.")
+    path = Path(job["packet_path"])
+    if not path.is_file():
+        raise HTTPException(404, "That document is not ready.")
+    return _render(
+        request,
+        "document.html",
+        page="documents",
+        job=job,
+        filename=path.name.split("-", 2)[-1],
+    )
+
+
 @app.get("/queue.json")
 def queue_json():
     rows = []
@@ -149,15 +168,25 @@ def queue_json():
     return {"jobs": rows}
 
 
+@app.get("/documents/{job_id}/{filename}")
+def document_file(job_id: int, filename: str):
+    return queue_packet(job_id, inline=1)
+
+
 @app.get("/queue/{job_id}/packet")
-def queue_packet(job_id: int):
+def queue_packet(job_id: int, inline: int = 0):
     job = get_job(job_id)
     if not job or not job.get("packet_path"):
         raise HTTPException(404, "That packet is not ready.")
     path = Path(job["packet_path"])
     if not path.is_file():
         raise HTTPException(404, "That packet is not ready.")
-    return FileResponse(path, filename=path.name.split("-", 2)[-1], media_type="application/pdf")
+    return FileResponse(
+        path,
+        filename=path.name.split("-", 2)[-1],
+        media_type="application/pdf",
+        content_disposition_type="inline" if inline else "attachment",
+    )
 
 
 @app.post("/findings/{finding_id}/queue")
@@ -209,6 +238,11 @@ def mailboxes(request: Request):
     )
 
 
+@app.get("/settings/log")
+def settings_log_page(request: Request):
+    return _render(request, "settings_log.html", page="settings", logs=list_api_logs())
+
+
 @app.get("/settings")
 def settings_page(request: Request):
     llm = resolve_llm()
@@ -225,8 +259,17 @@ def settings_page(request: Request):
         scanning=has_active_run(),
         deceased_name=setting("deceased_name"),
         date_of_death=setting("date_of_death"),
-        executor_name=setting("executor_name"),
-        executor_address=setting("executor_address"),
+        executor_company=setting("executor_company"),
+        executor_firstname=setting("executor_firstname"),
+        executor_lastname=setting("executor_lastname"),
+        executor_street=setting("executor_street"),
+        executor_street_no=setting("executor_street_no"),
+        executor_zip=setting("executor_zip"),
+        executor_city=setting("executor_city"),
+        executor_country=setting("executor_country"),
+        estate_bank=setting("estate_bank"),
+        estate_iban=setting("estate_iban"),
+        estate_swift=setting("estate_swift"),
         has_death_certificate=estate_file("death_certificate") is not None,
         has_authorisation=estate_file("executor_authorisation") is not None,
         death_certificate_name=(estate_file("death_certificate").name if estate_file("death_certificate") else ""),
@@ -274,15 +317,35 @@ def save_settings(
 async def save_estate(
     deceased_name: str = Form(""),
     date_of_death: str = Form(""),
-    executor_name: str = Form(""),
-    executor_address: str = Form(""),
+    executor_company: str = Form(""),
+    executor_firstname: str = Form(""),
+    executor_lastname: str = Form(""),
+    executor_street: str = Form(""),
+    executor_street_no: str = Form(""),
+    executor_zip: str = Form(""),
+    executor_city: str = Form(""),
+    executor_country: str = Form(""),
+    estate_bank: str = Form(""),
+    estate_iban: str = Form(""),
+    estate_swift: str = Form(""),
     death_certificate: UploadFile | None = File(None),
     executor_authorisation: UploadFile | None = File(None),
 ):
     set_setting("deceased_name", deceased_name.strip()[:200])
     set_setting("date_of_death", date_of_death.strip()[:40])
-    set_setting("executor_name", executor_name.strip()[:200])
-    set_setting("executor_address", executor_address.strip()[:500])
+    set_setting("executor_company", executor_company.strip()[:200])
+    set_setting("executor_firstname", executor_firstname.strip()[:120])
+    set_setting("executor_lastname", executor_lastname.strip()[:120])
+    set_setting("executor_street", executor_street.strip()[:200])
+    set_setting("executor_street_no", executor_street_no.strip()[:40])
+    set_setting("executor_zip", executor_zip.strip()[:20])
+    set_setting("executor_city", executor_city.strip()[:120])
+    set_setting("executor_country", executor_country.strip()[:120])
+    set_setting("estate_bank", estate_bank.strip()[:200])
+    set_setting("estate_iban", re.sub(r"\s+", " ", estate_iban).strip()[:64])
+    set_setting("estate_swift", estate_swift.strip().upper()[:16])
+    full_name = " ".join(part for part in (executor_firstname.strip(), executor_lastname.strip()) if part)
+    set_setting("executor_name", full_name[:200])
     try:
         for kind, upload in (
             ("death_certificate", death_certificate),

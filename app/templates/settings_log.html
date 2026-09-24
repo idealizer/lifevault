@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}API log — Lifevault{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="kicker">Model</p>
+  <h1>Log</h1>
+  <nav class="tabs">
+    <a href="/settings">Settings</a>
+    <a href="/settings/log" class="active">Log</a>
+  </nav>
+  <p>Each model call is stored on this computer. The API key is not included.</p>
+</section>
+<section class="stack">
+  {% for row in logs %}
+  <details class="log-call">
+    <summary>
+      <span class="muted">{{ row.created_at[:16]|replace('T', ' ') }}</span>
+      <strong>{{ row.provider }} · {{ row.model }}</strong>
+      <span class="pill status-{{ 'done' if row.status == 'ok' else 'error' }}">{{ row.status }}</span>
+    </summary>
+    <p class="muted">{{ row.endpoint }}</p>
+    <h3>Request</h3>
+    <pre>{{ row.request_json }}</pre>
+    <h3>Response</h3>
+    <pre>{{ row.response_json }}</pre>
+  </details>
+  {% else %}
+  <p class="muted">No model calls yet. A scan writes one entry for each batch.</p>
+  {% endfor %}
+</section>
+{% endblock %}

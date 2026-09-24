@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ filename }} — Lifevault{% endblock %}
+{% block content %}
+<section class="vault-head">
+  <div>
+    <p class="kicker"><a href="/documents">Documents</a></p>
+    <h1>{{ filename }}</h1>
+    <p class="muted">{{ job.provider }} · {{ job.action }}</p>
+  </div>
+  <a class="btn icon" href="/queue/{{ job.id }}/packet" aria-label="Download" title="Download">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>
+  </a>
+</section>
+<div id="pdf-pages" class="pdf-pages" data-src="/documents/{{ job.id }}/{{ filename }}"></div>
+<script src="/static/pdf.min.js"></script>
+{% endblock %}

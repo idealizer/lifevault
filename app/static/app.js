@@ -93,6 +93,20 @@ function setCount(name, value) {
   });
 }
 
+function iconLink(label, href, kind) {
+  const link = document.createElement("a");
+  link.className = "btn icon";
+  link.href = href;
+  link.setAttribute("aria-label", label);
+  link.title = label;
+  const paths = {
+    view: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/>',
+    download: '<path d="M12 4v10M8 10l4 4 4-4M5 19h14"/>',
+  };
+  link.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths[kind] + "</svg>";
+  return link;
+}
+
 function iconButton(label, kind) {
   const button = document.createElement("button");
   button.type = kind === "confirm" ? "button" : "submit";
@@ -217,11 +231,8 @@ function paintQueue(jobs) {
     pill.textContent = job.status;
     item.append(text, pill);
     if (job.ready) {
-      const link = document.createElement("a");
-      link.className = "btn";
-      link.href = "/queue/" + job.id + "/packet";
-      link.textContent = "Download";
-      item.appendChild(link);
+      item.appendChild(iconLink("View", "/documents/" + job.id, "view"));
+      item.appendChild(iconLink("Download", "/queue/" + job.id + "/packet", "download"));
     }
     list.appendChild(item);
   });
@@ -244,6 +255,7 @@ function bindStepDialog() {
   const form = document.getElementById("step-form");
   if (!dialog || !form) return;
   document.getElementById("step-cancel").addEventListener("click", () => dialog.close());
+  document.getElementById("step-close").addEventListener("click", () => dialog.close());
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const card = document.querySelector('.asset[data-finding="' + dialog.dataset.finding + '"]');
@@ -418,9 +430,27 @@ function bindFileNames() {
   });
 }
 
+function renderPdf() {
+  const host = document.getElementById("pdf-pages");
+  if (!host || !window.pdfjsLib) return;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/pdf.worker.min.js";
+  pdfjsLib.getDocument(host.dataset.src).promise.then(async (pdf) => {
+    for (let number = 1; number <= pdf.numPages; number += 1) {
+      const page = await pdf.getPage(number);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      host.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    }
+  }).catch(() => showToast("Could not open that document", "error"));
+}
+
 bindStepDialog();
 bindFileNames();
 pollQueue();
+renderPdf();
 
 const params = new URLSearchParams(location.search);
 if (params.get("run")) pollRun(params.get("run"));

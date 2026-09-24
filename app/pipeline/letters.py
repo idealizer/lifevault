@@ -11,6 +11,7 @@ from pypdf import PdfWriter
 
 from app.config import data_dir
 from app.db import setting
+from app.pipeline.letter_copy import compose, detect_language
 
 ESTATE_FILES = {
     "death_certificate": "death-certificate",
@@ -72,11 +73,11 @@ def packet_filename(finding: dict, action: str) -> str:
     return (slug[:80] or "estate-letter") + ".pdf"
 
 
-def write_packet(job_id: int, finding: dict, action: str) -> tuple[str, str]:
+def write_packet(job_id: int, finding: dict, action: str, source_text: str = "") -> tuple[str, str]:
     if not needs_letter(action):
         return "", "Noted. This step does not send a letter."
     letter = outbox_dir() / f"job-{job_id}-letter.pdf"
-    _write_letter(letter, finding, action)
+    _write_letter(letter, finding, action, source_text)
     packet = outbox_dir() / f"job-{job_id}-{packet_filename(finding, action)}"
     attached = _merge_packet(letter, packet)
     if attached:
@@ -119,54 +120,97 @@ def _image_page(path: Path, image: Path, title: str) -> None:
     pdf.output(path)
 
 
-def _write_letter(path: Path, finding: dict, action: str) -> None:
-    deceased = setting("deceased_name") or "the deceased"
-    died = setting("date_of_death") or ""
-    executor = setting("executor_name") or "Executor"
-    address = setting("executor_address") or ""
-    provider = finding.get("provider") or "the organisation"
-    label = finding.get("label") or "the asset"
-    kind = finding.get("asset_kind") or ""
-    identifiers = finding.get("identifiers") or []
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Helvetica", size=12)
-    lines = [
-        executor,
-        address,
-        date.today().isoformat(),
-        "",
-        provider,
-        "",
-        "Estate of " + deceased + (f", died {died}" if died else ""),
-        "",
-        "Dear Sir or Madam,",
-        "",
-        f"I am acting as executor of the estate of {deceased}.",
-        "Please " + action[:1].lower() + action[1:] + ".",
-        f"Organisation: {provider}.",
-        f"Asset: {label}.",
-    ]
-    if kind:
-        lines.append(f"Kind: {kind}.")
-    for item in identifiers:
-        value = str(item.get("value") or "").strip()
-        if value:
-            lines.append(f"{item.get('type') or 'Reference'}: {value}.")
-    lines.extend(
-        [
-            "",
-            "The death certificate and my authorisation as executor follow this letter.",
-            "Please confirm in writing when this has been done, and send any closing balance or refund to the estate.",
-            "",
-            "Yours faithfully,",
-            executor,
-        ]
+def _write_letter(path: Path, finding: dict, action: str, source_text: str = "") -> None:
+    contact = executor_contact()
+    provider = finding.get("provider") or ""
+    label = finding.get("label") or ""
+    asset = label or provider or "the relationship"
+    lang = detect_language(source_text)
+    letter = compose(
+        action,
+        lang,
+        {
+            "deceased": setting("deceased_name"),
+            "died": setting("date_of_death"),
+            "provider": provider or "the organisation",
+            "asset": asset,
+            "identifiers": finding.get("identifiers") or [],
+            "estate_bank": setting("estate_bank"),
+            "estate_iban": setting("estate_iban"),
+            "estate_swift": setting("estate_swift"),
+        },
     )
-    for line in lines:
-        pdf.multi_cell(pdf.epw, 8, _latin(line) or " ", new_x="LMARGIN", new_y="NEXT")
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=22)
+    pdf.add_page()
+    family = _use_font(pdf)
+    pdf.set_font(family, size=11)
+    for line in contact["lines"]:
+        pdf.multi_cell(pdf.epw, 6, line, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+    pdf.set_font(family, size=11)
+    pdf.multi_cell(pdf.epw, 6, provider or " ", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+    pdf.cell(pdf.epw, 6, _date_line(lang), align="R", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+    pdf.set_font(family, "B", 12)
+    pdf.multi_cell(pdf.epw, 7, letter["subject"], new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(6)
+    pdf.set_font(family, size=11)
+    pdf.multi_cell(pdf.epw, 6, letter["salutation"], new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+    for paragraph in letter["paragraphs"]:
+        pdf.multi_cell(pdf.epw, 6, paragraph, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(3)
+    pdf.ln(4)
+    pdf.multi_cell(pdf.epw, 6, letter["closing"], new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+    pdf.multi_cell(pdf.epw, 6, contact["signature"], new_x="LMARGIN", new_y="NEXT")
+    if contact["company"]:
+        pdf.multi_cell(pdf.epw, 6, contact["company"], new_x="LMARGIN", new_y="NEXT")
     pdf.output(path)
 
 
-def _latin(text: str) -> str:
-    return (text or "").encode("latin-1", "replace").decode("latin-1")
+def executor_contact() -> dict:
+    company = setting("executor_company").strip()
+    first = setting("executor_firstname").strip()
+    last = setting("executor_lastname").strip()
+    name = " ".join(part for part in (first, last) if part) or setting("executor_name").strip() or "Executor"
+    street = " ".join(
+        part
+        for part in (setting("executor_street").strip(), setting("executor_street_no").strip())
+        if part
+    )
+    city = " ".join(
+        part for part in (setting("executor_zip").strip(), setting("executor_city").strip()) if part
+    )
+    country = setting("executor_country").strip()
+    lines = [line for line in (company, name, street, city, country) if line]
+    if not lines:
+        legacy = setting("executor_address").strip()
+        lines = [name] + ([legacy] if legacy else [])
+    return {"lines": lines, "signature": name, "company": company}
+
+
+def _date_line(lang: str) -> str:
+    today = date.today()
+    months = {
+        "de": ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"),
+        "fr": ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"),
+        "it": ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"),
+        "en": ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"),
+    }
+    names = months.get(lang) or months["en"]
+    if lang == "en":
+        return f"{today.day} {names[today.month - 1]} {today.year}"
+    return f"{today.day}. {names[today.month - 1]} {today.year}"
+
+
+def _use_font(pdf: FPDF) -> str:
+    regular = Path(__file__).resolve().parent.parent / "fonts" / "DejaVuSans.ttf"
+    bold = regular.with_name("DejaVuSans-Bold.ttf")
+    if regular.is_file() and bold.is_file():
+        pdf.add_font("DejaVu", "", str(regular))
+        pdf.add_font("DejaVu", "B", str(bold))
+        return "DejaVu"
+    return "Helvetica"

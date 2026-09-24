@@ -37,7 +37,12 @@
   <div id="toasts" aria-live="polite"></div>
   <dialog id="step-dialog">
     <form id="step-form" class="stack">
-      <h2 id="step-title">Next step</h2>
+      <div class="dialog-head">
+        <h2 id="step-title">Next step</h2>
+        <button type="button" class="btn icon" id="step-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
       <p id="step-asset" class="muted"></p>
       <ul id="step-history" class="step-history"></ul>
       <label>Listed step

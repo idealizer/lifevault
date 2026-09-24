@@ -39,6 +39,13 @@ def test_pages_render():
     assert mailboxes.status_code == 200
     assert "Connect IMAP" in mailboxes.text
     assert "Apertus API key" not in mailboxes.text
+    documents = client.get("/documents")
+    assert documents.status_code == 200
+    assert "Documents" in documents.text
+    assert client.get("/documents/99999").status_code == 404
+    log = client.get("/settings/log")
+    assert log.status_code == 200
+    assert "No model calls yet" in log.text
     assert settings.status_code == 200
     assert "Apertus API key" in settings.text
     assert "Drop analysed emails" in settings.text

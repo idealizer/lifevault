@@ -141,6 +141,20 @@ def _ensure_message_columns(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS api_logs (
+            id INTEGER PRIMARY KEY,
+            provider TEXT NOT NULL DEFAULT '',
+            model TEXT NOT NULL DEFAULT '',
+            endpoint TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT '',
+            request_json TEXT NOT NULL DEFAULT '',
+            response_json TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
 
 
 def _rows(sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
@@ -192,6 +206,50 @@ def mask_secret(value: str) -> str:
     if len(value) <= 4:
         return "••••"
     return "••••" + value[-4:]
+
+
+def save_api_log(provider: str, model: str, endpoint: str, status: str, request: str, response: str) -> None:
+    now = utc_now()
+    with _lock:
+        conn = connect()
+        try:
+            conn.execute(
+                """
+                INSERT INTO api_logs(provider, model, endpoint, status, request_json, response_json, created_at)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    provider[:40],
+                    model[:120],
+                    endpoint[:300],
+                    status[:40],
+                    request[:400000],
+                    response[:400000],
+                    now,
+                ),
+            )
+            conn.execute(
+                """
+                DELETE FROM api_logs
+                WHERE id NOT IN (SELECT id FROM api_logs ORDER BY id DESC LIMIT 80)
+                """
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def list_api_logs(limit: int = 80) -> list[dict[str, Any]]:
+    with _lock:
+        return _rows(
+            """
+            SELECT id, provider, model, endpoint, status, request_json, response_json, created_at
+            FROM api_logs
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
 
 
 def list_sources() -> list[dict[str, Any]]:
@@ -782,7 +840,15 @@ def list_jobs(limit: int = 200) -> list[dict[str, Any]]:
 
 def get_job(job_id: int) -> dict[str, Any] | None:
     with _lock:
-        return _one("SELECT * FROM jobs WHERE id = ?", (job_id,))
+        return _one(
+            """
+            SELECT jobs.*, findings.label, findings.provider
+            FROM jobs
+            LEFT JOIN findings ON findings.id = jobs.finding_id
+            WHERE jobs.id = ?
+            """,
+            (job_id,),
+        )
 
 
 def set_finding_status(finding_id: int, status: str) -> None:

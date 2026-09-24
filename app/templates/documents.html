@@ -5,7 +5,7 @@
   <div>
     <p class="kicker">Executor</p>
     <h1>Documents</h1>
-    <p class="muted">Letters generated from confirmed assets. Download them again whenever you need them.</p>
+    <p class="muted">Letters generated from confirmed assets. Open one to read it here.</p>
   </div>
 </section>
 <ul class="documents" id="queue-list">
@@ -17,7 +17,12 @@
     </div>
     <span class="pill status-{{ job.status }}">{{ job.status }}</span>
     {% if job.packet_path %}
-    <a class="btn" href="/queue/{{ job.id }}/packet">Download</a>
+    <a class="btn icon" href="/documents/{{ job.id }}" aria-label="View" title="View">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/></svg>
+    </a>
+    <a class="btn icon" href="/queue/{{ job.id }}/packet" aria-label="Download" title="Download">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>
+    </a>
     {% endif %}
   </li>
   {% else %}

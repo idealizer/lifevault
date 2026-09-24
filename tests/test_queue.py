@@ -2,6 +2,7 @@ from fpdf import FPDF
 from pypdf import PdfReader
 
 from app.db import enqueue_job, get_job, init_db, save_finding, set_setting
+from app.pipeline.letter_copy import compose, detect_language
 from app.pipeline.letters import estate_file, needs_letter, packet_filename, save_estate_file
 from app.pipeline.queue import run_job
 
@@ -45,3 +46,30 @@ def test_cancel_subscription_builds_letter_packet(tmp_path, monkeypatch):
     assert "reader@example.com" in text
     assert "Ada Example" in text
     assert "Pat Example" in text
+    assert "Kind:" not in text
+    assert "Please cancel Example News with Example News" in text
+
+
+def test_transfer_letter_names_estate_account():
+    letter = compose(
+        "Move the balance to the estate account",
+        "en",
+        {
+            "deceased": "Ada Example",
+            "provider": "Example Bank",
+            "asset": "current account",
+            "estate_bank": "Estate Bank",
+            "estate_iban": "CH00 0000 0000 0000 0000 0",
+            "estate_swift": "EXAMPLESW",
+        },
+    )
+    text = " ".join(letter["paragraphs"])
+    assert "Estate Bank" in text
+    assert "CH00 0000 0000 0000 0000 0" in text
+    assert "EXAMPLESW" in text
+
+
+def test_letter_follows_source_language():
+    assert detect_language("Sehr geehrte Damen und Herren, Ihr Konto wurde belastet.") == "de"
+    assert detect_language("Madame, Monsieur, votre compte est ouvert.") == "fr"
+    assert detect_language("Gentile cliente, il conto è stato aggiornato.") == "it"
