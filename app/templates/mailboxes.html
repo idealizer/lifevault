@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Lifevault mailboxes{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="kicker">Sources</p>
+  <h1>Mailboxes</h1>
+  <p>Connect a mailbox and scan it. The model key lives in Settings. Results open in the vault.</p>
+</section>
+
+<section class="split">
+  <form class="panel stack" method="post" action="/sources/imap">
+    <h2>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3z"/><path d="m3 7 9 7 9-7"/></svg>
+      IMAP
+    </h2>
+    <label>Label <input name="label" placeholder="Personal mailbox"></label>
+    <div class="split">
+      <label>Host <input name="host_name" required placeholder="imap.example.com"></label>
+      <label>Port <input name="port_number" type="number" value="993" min="1" max="65535"></label>
+    </div>
+    <label>Username <input name="username" required autocomplete="username"></label>
+    <label>App password <input name="password" type="password" required autocomplete="current-password"></label>
+    <label>Mailbox <input name="mailbox" value="INBOX"></label>
+    <button class="btn primary" type="submit">Connect IMAP</button>
+  </form>
+
+  <div class="panel stack">
+    <h2>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="M4 7l8 6 8-6"/></svg>
+      Gmail
+    </h2>
+    <p class="muted">Readonly access. In Google Cloud, add this redirect URI:</p>
+    <p class="mono">{{ redirect_uri }}</p>
+    <form method="post" action="/sources/gmail/secret" enctype="multipart/form-data" class="stack">
+      <label>OAuth client JSON
+        <input type="file" name="client_secret" accept="application/json,.json" required>
+      </label>
+      <button class="btn" type="submit">{% if google_ready %}Replace client JSON{% else %}Upload client JSON{% endif %}</button>
+    </form>
+    {% if google_ready %}
+    <a class="btn primary" href="/sources/gmail/start">Connect Gmail</a>
+    {% else %}
+    <p class="muted">Upload the client JSON, then connect.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="panel stack">
+  <h2>Import a file</h2>
+  <p class="muted">CSV or JSON with sender, recipient, senddate, subject, and message. Dates inside the message, such as a subscription period, are kept for analysis.</p>
+  <form method="post" action="/sources/file" enctype="multipart/form-data" class="stack">
+    <label>Label <input name="label" placeholder="Exported mailbox"></label>
+    <label>File
+      <input type="file" name="mail_file" accept=".csv,.json,text/csv,application/json" required>
+    </label>
+    <button class="btn primary" type="submit">Import and analyse</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Connected</h2>
+  {% if sources %}
+  <ul class="cards">
+    {% for source in sources %}
+    <li>
+      <div>
+        <strong>{{ source.label }}</strong>
+        <span class="pill">{{ source.kind }}</span>
+      </div>
+      <p class="muted">
+        {% if source.kind == 'imap' %}{{ source.config.username }} · {{ source.config.host }}{% elif source.kind == 'file' %}{{ source.config.filename }} · {{ source.config.count }} messages{% else %}{{ source.config.email }}{% endif %}
+      </p>
+      <form method="post" action="/sources/{{ source.id }}/delete" data-confirm>
+        <button class="btn danger" type="submit" aria-label="Remove {{ source.label }}">Remove</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Connect a mailbox to start a discovery scan.</p>
+  {% endif %}
+</section>
+
+<section class="panel stack" id="scan">
+  <h2>Scan</h2>
+  {% if sources %}
+  <form method="post" action="/scans" class="stack">
+    <label>Mailbox
+      <select name="source_id" required>
+        {% for source in sources %}
+        <option value="{{ source.id }}">{{ source.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="split">
+      <label>Years back <input name="years" type="number" min="1" max="15" value="3"></label>
+      <label>Max messages <input name="max_messages" type="number" min="1" max="20000" value="3000"></label>
+    </div>
+    <label>Token budget <input name="token_budget" type="number" min="10000" value="{{ token_budget }}"></label>
+    <label class="check"><input type="checkbox" name="force" value="1"> Re-analyse messages already reviewed</label>
+    <button class="btn primary" type="submit" {% if scanning %}disabled{% endif %}>Start scan</button>
+  </form>
+  {% else %}
+  <p class="muted">Add a mailbox before scanning.</p>
+  {% endif %}
+  <div id="progress" hidden>
+    <p id="progress-note"></p>
+    <div class="bar" aria-hidden="true"><span id="progress-fill"></span></div>
+    <p class="muted" id="progress-meta"></p>
+    <form id="stop-form" method="post" action="">
+      <button class="btn" type="submit">Stop</button>
+    </form>
+  </div>
+</section>
+
+{% if runs %}
+<section class="panel">
+  <h2>Recent scans</h2>
+  <ul class="runs">
+    {% for run in runs %}
+    <li data-run="{{ run.id }}" data-status="{{ run.status }}">
+      <span class="pill status-{{ run.status }}">{{ run.status }}</span>
+      <span>{{ run.source_label or 'Mailbox' }}</span>
+      <span class="muted">{{ run.messages_screened }} screened · {{ run.tokens_used }} tokens</span>
+      {% if run.note %}<span class="muted">{{ run.note }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

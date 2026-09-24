@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Lifevault mailboxes{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="kicker">Digital legacy</p>
+  <h1>Find accounts and assets in estate mail</h1>
+  <p>Connect Gmail or IMAP, screen messages locally, then review a categorized inventory. Swisscom keys expire in about 60 minutes — paste a fresh key here when a scan stops.</p>
+</section>
+
+<section class="panel" id="settings">
+  <h2>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg>
+    Model
+  </h2>
+  <form method="post" action="/settings" class="stack">
+    <label>Provider
+      <select name="llm_provider">
+        <option value="apertus" {% if provider != 'grok' %}selected{% endif %}>Apertus 1.5 70B</option>
+        <option value="grok" {% if provider == 'grok' %}selected{% endif %}>Grok</option>
+      </select>
+    </label>
+    <div class="split">
+      <label>Apertus API key
+        <input type="password" name="apertus_api_key" autocomplete="off" placeholder="{{ key_hint if provider != 'grok' and key_hint else 'Paste a new key' }}">
+      </label>
+      <label>Grok API key
+        <input type="password" name="xai_api_key" autocomplete="off" placeholder="{{ key_hint if provider == 'grok' and key_hint else 'Optional' }}">
+      </label>
+    </div>
+    <div class="split">
+      <label>Apertus model
+        <input name="apertus_model" value="{{ apertus_model }}">
+      </label>
+      <label>Grok model
+        <input name="xai_model" value="{{ grok_model }}">
+      </label>
+    </div>
+    <label>Default token budget
+      <input name="token_budget" inputmode="numeric" value="{{ token_budget }}">
+    </label>
+    <button class="btn primary" type="submit">Save settings</button>
+  </form>
+</section>
+
+<section class="split">
+  <form class="panel stack" method="post" action="/sources/imap">
+    <h2>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3z"/><path d="m3 7 9 7 9-7"/></svg>
+      IMAP
+    </h2>
+    <label>Label <input name="label" placeholder="Personal mailbox"></label>
+    <div class="split">
+      <label>Host <input name="host_name" required placeholder="imap.example.com"></label>
+      <label>Port <input name="port_number" type="number" value="993" min="1" max="65535"></label>
+    </div>
+    <label>Username <input name="username" required autocomplete="username"></label>
+    <label>App password <input name="password" type="password" required autocomplete="current-password"></label>
+    <label>Mailbox <input name="mailbox" value="INBOX"></label>
+    <button class="btn primary" type="submit">Connect IMAP</button>
+  </form>
+
+  <div class="panel stack">
+    <h2>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="M4 7l8 6 8-6"/></svg>
+      Gmail
+    </h2>
+    <p class="muted">Readonly access. In Google Cloud, add this redirect URI:</p>
+    <p class="mono">{{ redirect_uri }}</p>
+    <form method="post" action="/sources/gmail/secret" enctype="multipart/form-data" class="stack">
+      <label>OAuth client JSON
+        <input type="file" name="client_secret" accept="application/json,.json" required>
+      </label>
+      <button class="btn" type="submit">{% if google_ready %}Replace client JSON{% else %}Upload client JSON{% endif %}</button>
+    </form>
+    {% if google_ready %}
+    <a class="btn primary" href="/sources/gmail/start">Connect Gmail</a>
+    {% else %}
+    <p class="muted">Upload the client JSON, then connect.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>
+    Mailboxes
+  </h2>
+  {% if sources %}
+  <ul class="cards">
+    {% for source in sources %}
+    <li>
+      <div>
+        <strong>{{ source.label }}</strong>
+        <span class="pill">{{ source.kind }}</span>
+      </div>
+      <p class="muted">
+        {% if source.kind == 'imap' %}{{ source.config.username }} · {{ source.config.host }}{% else %}{{ source.config.email }}{% endif %}
+      </p>
+      <form method="post" action="/sources/{{ source.id }}/delete" data-confirm>
+        <button class="btn danger" type="submit" aria-label="Remove {{ source.label }}">Remove</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Connect a mailbox to start a discovery scan.</p>
+  {% endif %}
+</section>
+
+<section class="panel stack" id="scan">
+  <h2>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-3.5-3.5"/></svg>
+    Scan
+  </h2>
+  {% if sources %}
+  <form method="post" action="/scans" class="stack">
+    <label>Mailbox
+      <select name="source_id" required>
+        {% for source in sources %}
+        <option value="{{ source.id }}">{{ source.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="split">
+      <label>Years back <input name="years" type="number" min="1" max="15" value="3"></label>
+      <label>Max messages <input name="max_messages" type="number" min="1" max="20000" value="3000"></label>
+    </div>
+    <label>Token budget <input name="token_budget" type="number" min="10000" value="{{ token_budget }}"></label>
+    <label class="check"><input type="checkbox" name="force" value="1"> Re-analyse messages already reviewed</label>
+    <button class="btn primary" type="submit" {% if scanning %}disabled{% endif %}>Start scan</button>
+  </form>
+  {% else %}
+  <p class="muted">Add a mailbox before scanning.</p>
+  {% endif %}
+  <div id="progress" hidden>
+    <p id="progress-note"></p>
+    <div class="bar" aria-hidden="true"><span id="progress-fill"></span></div>
+    <p class="muted" id="progress-meta"></p>
+    <form id="stop-form" method="post" action="">
+      <button class="btn" type="submit">Stop</button>
+    </form>
+  </div>
+</section>
+
+{% if runs %}
+<section class="panel">
+  <h2>Recent scans</h2>
+  <ul class="runs">
+    {% for run in runs %}
+    <li data-run="{{ run.id }}" data-status="{{ run.status }}">
+      <span class="pill status-{{ run.status }}">{{ run.status }}</span>
+      <span>{{ run.source_label or 'Mailbox' }}</span>
+      <span class="muted">{{ run.messages_screened }} screened · {{ run.tokens_used }} tokens</span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

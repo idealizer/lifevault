@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Lifevault settings{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="kicker">Model</p>
+  <h1>Settings</h1>
+  <p>Swisscom bearer tokens expire in about 60 minutes. Paste a fresh key here without touching the vault.</p>
+</section>
+<section class="panel">
+  <form method="post" action="/settings" class="stack">
+    <label>Provider
+      <select name="llm_provider">
+        <option value="apertus" {% if provider != 'grok' %}selected{% endif %}>Apertus 1.5 70B</option>
+        <option value="grok" {% if provider == 'grok' %}selected{% endif %}>Grok</option>
+      </select>
+    </label>
+    <div class="split">
+      <label>Apertus API key
+        <input type="password" name="apertus_api_key" autocomplete="off" placeholder="{{ key_hint if provider != 'grok' and key_hint else 'Paste a new key' }}">
+      </label>
+      <label>Grok API key
+        <input type="password" name="xai_api_key" autocomplete="off" placeholder="{{ key_hint if provider == 'grok' and key_hint else 'Optional' }}">
+      </label>
+    </div>
+    <div class="split">
+      <label>Apertus model
+        <input name="apertus_model" value="{{ apertus_model }}">
+      </label>
+      <label>Grok model
+        <input name="xai_model" value="{{ grok_model }}">
+      </label>
+    </div>
+    <label>Default token budget
+      <input name="token_budget" inputmode="numeric" value="{{ token_budget }}">
+    </label>
+    <button class="btn primary" type="submit">Save settings</button>
+  </form>
+</section>
+<section class="panel stack">
+  <h2>Estate documents</h2>
+  <p class="muted">These are attached when a queued step writes to an organisation. A cancellation letter is generated as a PDF, then packed with the death certificate and the executor authorisation.</p>
+  <form method="post" action="/settings/estate" enctype="multipart/form-data" class="stack">
+    <div class="split">
+      <label>Name of the deceased
+        <input name="deceased_name" value="{{ deceased_name }}">
+      </label>
+      <label>Date of death
+        <input name="date_of_death" value="{{ date_of_death }}" placeholder="YYYY-MM-DD">
+      </label>
+    </div>
+    <div class="split">
+      <label>Executor name
+        <input name="executor_name" value="{{ executor_name }}">
+      </label>
+      <label>Executor address
+        <input name="executor_address" value="{{ executor_address }}">
+      </label>
+    </div>
+    <label>Death certificate {% if has_death_certificate %}<span class="pill">On file</span>{% endif %}
+      <input type="file" name="death_certificate" accept=".pdf,.png,.jpg,.jpeg">
+    </label>
+    <label>Executor authorisation {% if has_authorisation %}<span class="pill">On file</span>{% endif %}
+      <input type="file" name="executor_authorisation" accept=".pdf,.png,.jpg,.jpeg">
+    </label>
+    <button class="btn primary" type="submit">Save estate documents</button>
+  </form>
+</section>
+<section class="panel stack">
+  <h2>Demo data</h2>
+  <p class="muted">{{ analysed.messages }} analysed emails and {{ analysed.findings }} vault items are stored on this computer. Dropping them clears the vault and imported files. Mailbox logins and the model key stay, so you can import another dataset.</p>
+  <form method="post" action="/admin/drop-mail" data-confirm data-confirm-title="Drop analysed emails?" data-confirm-text="This deletes scanned messages, imported files, findings, and scan history on this computer. Mailbox logins and the model key stay." data-confirm-ok="Drop emails">
+    <button class="btn danger" type="submit" {% if scanning %}disabled{% endif %}>Drop analysed emails</button>
+  </form>
+</section>
+{% endblock %}

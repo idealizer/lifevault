@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Lifevault inventory{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="kicker">Inventory</p>
+  <h1>Accounts and assets</h1>
+  <p>{{ total }} shown. Confirm what the executor should keep, and dismiss noise.</p>
+</section>
+
+<div class="filters">
+  {% for key, label in [('active','Active'), ('candidate','Candidates'), ('confirmed','Confirmed'), ('dismissed','Dismissed'), ('all','All')] %}
+  <a class="pill {% if status == key %}on{% endif %}" href="/inventory?status={{ key }}">{{ label }} {{ counts[key] }}</a>
+  {% endfor %}
+</div>
+
+{% if sections %}
+  {% for section in sections %}
+  <section class="panel">
+    <h2>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v4H4zM4 14h10v4H4z"/></svg>
+      {{ section.label }}
+      <span class="pill">{{ section.findings|length }}</span>
+    </h2>
+    <ul class="findings">
+      {% for item in section.findings %}
+      <li>
+        <div class="finding-head">
+          <div>
+            <strong>{{ item.label }}</strong>
+            <p class="muted">{{ item.provider }}{% if item.asset_kind %} · {{ item.asset_kind }}{% endif %}</p>
+          </div>
+          <span class="pill conf {% if item.confidence >= 0.75 %}high{% elif item.confidence >= 0.45 %}mid{% else %}low{% endif %}">{{ '%.0f'|format(item.confidence * 100) }}%</span>
+          <span class="pill status-{{ item.status }}">{{ item.status }}</span>
+        </div>
+        {% if item.identifiers %}
+        <ul class="ids">
+          {% for ident in item.identifiers %}
+          <li><span class="pill">{{ ident.type }}</span> <span class="mono">{{ ident.value }}</span></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% if item.evidence %}
+        <ul class="evidence">
+          {% for proof in item.evidence[:4] %}
+          <li>
+            <span class="muted">{{ proof.message_date[:10] }}</span>
+            {{ proof.subject or 'Message' }}
+            {% if proof.excerpt %}<q>{{ proof.excerpt }}</q>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <div class="row">
+          {% if item.status != 'confirmed' %}
+          <form method="post" action="/findings/{{ item.id }}/status">
+            <input type="hidden" name="status" value="confirmed">
+            <input type="hidden" name="back" value="{{ status }}">
+            <button class="btn primary" type="submit">Confirm</button>
+          </form>
+          {% endif %}
+          {% if item.status != 'dismissed' %}
+          <form method="post" action="/findings/{{ item.id }}/status">
+            <input type="hidden" name="status" value="dismissed">
+            <input type="hidden" name="back" value="{{ status }}">
+            <button class="btn" type="submit">Dismiss</button>
+          </form>
+          {% else %}
+          <form method="post" action="/findings/{{ item.id }}/status">
+            <input type="hidden" name="status" value="candidate">
+            <input type="hidden" name="back" value="{{ status }}">
+            <button class="btn" type="submit">Restore</button>
+          </form>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+{% else %}
+<section class="panel">
+  <p class="muted">Nothing in this view yet. Run a scan from the mailbox page, or switch filters.</p>
+  <a class="btn primary" href="/">Back to mailboxes</a>
+</section>
+{% endif %}
+{% endblock %}

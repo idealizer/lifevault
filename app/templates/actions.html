@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Next steps — Lifevault{% endblock %}
+{% block content %}
+<section class="vault-head">
+  <div>
+    <p class="kicker">Executor</p>
+    <h1>Next steps</h1>
+    <p class="muted">For each confirmed asset, accept the proposed step, pick another listed step, or write your own.</p>
+  </div>
+  <form method="post" action="/actions/propose">
+    <button class="btn primary" type="submit">Propose with model</button>
+  </form>
+</section>
+
+{% if items %}
+<section class="stack">
+  {% for item in items %}
+  <article class="panel step">
+    <div class="step-head">
+      <div>
+        <strong>{{ item.label }}</strong>
+        <p class="muted">{{ item.category_label }} · {{ item.provider }}</p>
+      </div>
+      <span class="pill {% if item.action_status == 'accepted' %}status-confirmed{% else %}status-candidate{% endif %}">
+        {{ 'Saved' if item.action_status == 'accepted' else 'Proposed' }}
+      </span>
+    </div>
+    {% if item.chosen_action %}
+    <p>Saved step: {{ item.chosen_action }}</p>
+    {% elif item.proposed_action %}
+    <p>Proposed: {{ item.proposed_action }}{% if item.proposed_reason %} — {{ item.proposed_reason }}{% endif %}</p>
+    {% else %}
+    <p class="muted">No proposal yet. Ask the model, or choose a step yourself.</p>
+    {% endif %}
+    <form method="post" action="/actions/choose" class="stack">
+      <input type="hidden" name="finding_id" value="{{ item.id }}">
+      <label>
+        Listed step
+        <select name="action">
+          {% for option in item.options %}
+          <option value="{{ option }}" {% if option == (item.chosen_action or item.proposed_action) %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        Or your own step
+        <input name="note" value="{{ item.action_note }}" placeholder="Write a different step">
+      </label>
+      <button class="btn" type="submit">Save next step</button>
+    </form>
+  </article>
+  {% endfor %}
+</section>
+{% else %}
+<section class="panel">
+  <p>Confirm an asset in the vault first. Dismissed and unreviewed items stay off this page.</p>
+  <a class="btn primary" href="/?status=candidate">Review the vault</a>
+</section>
+{% endif %}
+{% endblock %}

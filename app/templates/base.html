@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Lifevault{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script>
+    (function () {
+      var saved = localStorage.getItem("lifevault-theme");
+      var dark = saved === "dark" || (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      if (dark) document.documentElement.classList.add("dark");
+    })();
+  </script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"/><path d="M12 12 4.5 8M12 12v9M12 12l7.5-4"/></svg>
+      <span>Lifevault</span>
+    </a>
+    <nav>
+      <a href="/" class="{% if page == 'vault' %}active{% endif %}">Vault</a>
+      <a href="/mailboxes" class="{% if page == 'mailboxes' %}active{% endif %}">Mailboxes</a>
+      <a href="/settings" class="{% if page == 'settings' %}active{% endif %}">Settings</a>
+      <button type="button" id="theme-toggle" aria-label="Toggle color theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3a8 8 0 1 0 5 14 7 7 0 1 1-5-14Z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+    </nav>
+  </header>
+  <main class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="fine">Runs on this machine. Only screened excerpts are sent to the selected model.</footer>
+  <div id="toasts" aria-live="polite"></div>
+  <dialog id="step-dialog">
+    <form id="step-form" class="stack">
+      <h2 id="step-title">Next step</h2>
+      <p id="step-asset" class="muted"></p>
+      <label>Listed step
+        <select id="step-action" name="action"></select>
+      </label>
+      <label>Or your own step
+        <input id="step-note" name="note" placeholder="Write a different step">
+      </label>
+      <div class="row">
+        <button type="button" class="btn" id="step-cancel">Cancel</button>
+        <button type="submit" class="btn primary">Queue this step</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="message-dialog" class="message-dialog">
+    <div class="row">
+      <h2>Source message</h2>
+      <form method="dialog"><button class="btn" value="cancel">Close</button></form>
+    </div>
+    <div id="message-body" class="message-body"></div>
+  </dialog>
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <h2 id="confirm-title">Remove this mailbox?</h2>
+      <p id="confirm-text">Messages stored for it, and findings that only came from it, will be deleted on this computer.</p>
+      <div class="row">
+        <button value="cancel" class="btn">Cancel</button>
+        <button id="confirm-ok" value="ok" class="btn danger">Remove</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="/static/app.js"></script>
+</body>
+</html>

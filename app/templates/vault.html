@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Lifevault{% endblock %}
+{% block content %}
+<section class="vault-head">
+  <div>
+    <p class="kicker">Digital estate</p>
+    <h1>Vault</h1>
+    <p class="muted">Accounts, domains, subscriptions, and risks found in connected mail.</p>
+  </div>
+  <a class="btn primary" href="/mailboxes">Scan mail</a>
+</section>
+
+{% if scanning %}
+<p class="banner">A scan is still reading mail. <a href="/mailboxes">Watch progress</a></p>
+{% endif %}
+
+<section class="stats">
+  <article><strong data-count="view">{{ total }}</strong><span>In view</span></article>
+  <article><strong data-count="candidate">{{ counts.candidate }}</strong><span>To review</span></article>
+  <article><strong data-count="confirmed">{{ counts.confirmed }}</strong><span>Confirmed</span></article>
+  <article><strong data-count="risks">{{ risks }}</strong><span>Risks</span></article>
+</section>
+
+<div class="filters">
+  {% for key, label in [('active','Active'), ('candidate','Review'), ('confirmed','Confirmed'), ('dismissed','Dismissed'), ('all','All')] %}
+  <a class="pill {% if status == key and not category %}on{% endif %}" href="/?status={{ key }}">{{ label }} <span data-count="{{ key }}">{{ counts[key] }}</span></a>
+  {% endfor %}
+</div>
+
+<section class="panel" id="queue-panel">
+  <h2>Queue</h2>
+  <ul class="queue" id="queue-list">
+    {% for job in jobs %}
+    <li data-job="{{ job.id }}">
+      <strong>{{ job.label or 'Asset' }}</strong>
+      <span>{{ job.action }}</span>
+      <span class="pill status-{{ job.status }}">{{ job.status }}</span>
+      {% if job.packet_path %}<a href="/queue/{{ job.id }}/packet">Download packet</a>{% endif %}
+    </li>
+    {% else %}
+    <li class="muted" data-empty>Confirmed steps appear here and run in the background.</li>
+    {% endfor %}
+  </ul>
+</section>
+<script type="application/json" id="estate-actions">{{ estate_actions|tojson }}</script>
+
+<nav class="vault-grid" aria-label="Categories">
+  {% for tile in tiles %}
+  <a class="tile {% if category == tile.key %}on{% endif %} {% if tile.count == 0 %}empty{% endif %}" href="/?status={{ status }}&category={{ tile.key }}">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ tile.icon }}"/></svg>
+    <span>{{ tile.label }}</span>
+    <strong data-tile="{{ tile.key }}">{{ tile.count }}</strong>
+  </a>
+  {% endfor %}
+</nav>
+
+{% if sections %}
+  {% for section in sections %}
+  <section class="panel" data-category="{{ section.key }}">
+    <h2>{{ section.label }} <span class="pill js-section-count">{{ section.findings|length }}</span></h2>
+    <ul class="assets">
+      {% for item in section.findings %}
+      <li class="asset" data-finding="{{ item.id }}" data-status="{{ item.status }}" data-category="{{ section.key }}">
+        <div class="asset-main">
+          <strong>{{ item.label }}</strong>
+          <p class="muted">{{ item.provider }}{% if item.asset_kind %} · {{ item.asset_kind }}{% endif %}{% if item.identifiers %} · {{ item.identifiers[0].type }} {{ item.identifiers[0].value }}{% endif %}</p>
+        </div>
+        <div class="asset-side">
+          {% if item.evidence %}
+          <button type="button" class="btn icon" data-source="{{ item.id }}" aria-label="View source message">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4V6Z"/><path d="m4 7 8 6 8-6"/></svg>
+          </button>
+          {% endif %}
+          <span class="pill conf {% if item.confidence >= 0.75 %}high{% elif item.confidence >= 0.45 %}mid{% else %}low{% endif %}">{{ '%.0f'|format(item.confidence * 100) }}%</span>
+          <span class="pill js-status status-{{ item.status }}">{{ item.status }}</span>
+          <div class="row" data-actions></div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+{% else %}
+<section class="panel">
+  <p>Nothing in this view yet.</p>
+  <a class="btn primary" href="/mailboxes">Connect a mailbox</a>
+</section>
+{% endif %}
+{% endblock %}
