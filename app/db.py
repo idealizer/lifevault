@@ -1007,7 +1007,6 @@ def enqueue_job(finding_id: int, action: str) -> int:
                 (finding_id, action[:500], now, now),
             )
             event_id = int(cur.lastrowid)
-            _insert_event(conn, finding_id, "letter_queued", "Letter queued", action[:500], event_id, "")
             conn.commit()
             return event_id
         finally:

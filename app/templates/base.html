@@ -22,7 +22,7 @@
     </a>
     <nav>
       <a href="/" class="{% if page == 'assets' %}active{% endif %}">Assets</a>
-      <a href="/vault" class="{% if page == 'vault' %}active{% endif %}">Vault</a>
+      <a href="/vault" class="{% if page == 'vault' %}active{% endif %}">Logins</a>
       <a href="/documents" class="{% if page == 'documents' %}active{% endif %}">Documents</a>
       <a href="/mailboxes" class="{% if page == 'mailboxes' %}active{% endif %}">Mailboxes</a>
       <a href="/settings" class="{% if page == 'settings' %}active{% endif %}">Settings</a>
@@ -35,7 +35,6 @@
   <main class="wrap">
     {% block content %}{% endblock %}
   </main>
-  <footer class="fine">Runs on this machine. Only screened excerpts are sent to the selected model.</footer>
   <div id="toasts" aria-live="polite"></div>
   <dialog id="step-dialog">
     <form id="step-form" class="step-form">

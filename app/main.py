@@ -66,6 +66,7 @@ from app.pipeline.cases import (
     estate_blockers,
     mark_sent,
     on_action_queued,
+    visible_events,
     save_estate_checklist,
     worklist,
 )
@@ -318,7 +319,7 @@ def case_page(request: Request, finding_id: int):
         page="documents",
         finding=row,
         stage_label=STAGE_LABELS.get(row.get("stage") or "", "Discovered"),
-        events=list_case_events(finding_id),
+        events=visible_events(list_case_events(finding_id), jobs),
         documents=list_case_documents(finding_id),
         jobs=jobs,
         preview_src=preview,

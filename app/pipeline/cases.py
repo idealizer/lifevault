@@ -156,19 +156,14 @@ def on_action_queued(finding_id: int, action: str) -> None:
     chosen = disposition_for(action)
     if stage == "discovered":
         update_finding_case(finding_id, "identified", "confirmed")
-        record_case_event(finding_id, "identified", "Accepted as an estate asset", action)
         stage = "identified"
-    if stage == "identified" and needs_secure(row.get("category") or ""):
-        record_case_event(finding_id, "override", "Securing skipped", f"A step was queued before securing: {action}")
     if stage in {"identified", "secured", "closed"}:
         update_finding_case(finding_id, "processing", "confirmed", chosen, action)
         if stage == "closed":
             record_case_event(finding_id, "reopened", "Reopened", action)
             set_setting("estate_closed", "")
-        record_case_event(finding_id, "processing", "Disposition set", f"{chosen}: {action}")
     elif stage == "processing" and chosen != (row.get("disposition") or ""):
         update_finding_case(finding_id, "processing", "confirmed", chosen, action)
-        record_case_event(finding_id, "processing", "Disposition set", f"{chosen}: {action}")
 
 
 def add_reply(finding_id: int, note: str, path: str = "", job_id: int | None = None, title: str = "Response") -> None:
@@ -245,6 +240,26 @@ def close_estate() -> None:
         raise CaseError(blockers[0])
     set_setting("estate_closed", "1")
     record_case_event(0, "estate_closed", "Estate closed", setting("estate_discharge_note"))
+
+
+def visible_events(events: list[dict], jobs: list[dict] | None = None) -> list[dict]:
+    jobs = jobs or []
+    actions = {job.get("action") or "" for job in jobs if job.get("action")}
+    ready_jobs = {event.get("job_id") for event in events if event.get("kind") == "letter_ready" and event.get("job_id")}
+    shown = []
+    for event in events:
+        kind = event.get("kind") or ""
+        detail = event.get("detail") or ""
+        if kind == "letter_queued" and event.get("job_id") in ready_jobs:
+            continue
+        if kind == "override" and detail.startswith("A step was queued before securing"):
+            continue
+        if kind == "processing" and event.get("summary") == "Disposition set" and any(action and action in detail for action in actions):
+            continue
+        if kind == "identified" and detail in actions:
+            continue
+        shown.append(event)
+    return shown
 
 
 def worklist() -> list[dict]:

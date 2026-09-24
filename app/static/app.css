@@ -150,21 +150,31 @@ html.dark .status-closed { color: #14241c; }
 .case-rail { display: grid; gap: 16px; align-content: start; min-width: 0; }
 .case-rail .panel { padding: 16px; }
 .case-rail .panel h2 { font-size: 1rem; }
-.case-rail .panel form.stack > .btn.icon { justify-self: end; }
 .rail-inline { display: flex; gap: 8px; align-items: center; }
 .rail-inline select, .rail-inline input { flex: 1; min-width: 0; }
 .rail-inline span { flex: 1; }
+.rail-inline .btn.icon { flex: none; }
 .rail-timeline { list-style: none; margin: 0; padding: 0 0 0 18px; position: relative; display: grid; gap: 0; }
 .rail-timeline::before { content: ""; position: absolute; left: 4px; top: 8px; bottom: 8px; width: 2px; background: var(--border); }
-.rail-timeline li { position: relative; padding: 0 0 8px 10px; display: block; }
+.rail-timeline li { position: relative; padding: 0 0 10px 10px; display: grid; gap: 2px; }
 .rail-timeline li::before { content: ""; position: absolute; left: -18px; top: 8px; width: 10px; height: 10px; border-radius: 999px; background: var(--surface); border: 2px solid var(--accent); box-sizing: border-box; }
-.rail-line { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.rail-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .rail-line time { flex: none; color: var(--muted); font-size: 0.75rem; }
 .rail-line strong { font-size: 0.9rem; font-weight: 650; min-width: 0; }
-.rail-line .muted, .rail-timeline .muted { margin: 0; font-size: 0.8rem; }
-.rail-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; }
+.rail-timeline .muted { margin: 0; font-size: 0.8rem; }
+.rail-actions { display: flex; align-items: center; gap: 2px; }
 .rail-actions form { display: flex; }
-.rail-actions .btn.icon, .rail-inline .btn.icon { width: 44px; height: 44px; min-height: 44px; border-radius: 999px; }
+.rail-actions .btn.icon {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border-color: transparent;
+  background: transparent;
+}
+.rail-actions .btn.icon:hover { border-color: var(--accent); background: var(--pill); }
+.rail-actions .btn.icon svg { width: 16px; height: 16px; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }
 .muted, .fine, q { color: var(--muted); }
 .mono { font-family: Consolas, "Courier New", monospace; word-break: break-all; }

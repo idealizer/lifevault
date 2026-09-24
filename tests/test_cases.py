@@ -11,7 +11,7 @@ from app.db import (
     setting,
 )
 from app.main import app
-from app.pipeline.cases import advance, close_estate, estate_blockers
+from app.pipeline.cases import advance, close_estate, estate_blockers, on_action_queued, visible_events
 from app.pipeline.letters import save_estate_file
 
 
@@ -113,6 +113,33 @@ def test_new_mail_reopens_a_closed_case(tmp_path, monkeypatch):
     assert setting("estate_closed") == ""
     kinds = [row["kind"] for row in list_case_events(finding_id)]
     assert "reopened" in kinds
+
+
+def test_queueing_a_letter_does_not_repeat_the_same_step(tmp_path, monkeypatch):
+    monkeypatch.setenv("LIFE_DB", str(tmp_path / "life.db"))
+    init_db()
+    finding_id = _asset("case|queue-once", category="banking")
+    action = "Notify the bank of the death and request the balance"
+    on_action_queued(finding_id, action)
+    enqueue_job(finding_id, action)
+    kinds = [row["kind"] for row in list_case_events(finding_id)]
+    assert "override" not in kinds
+    assert "letter_queued" not in kinds
+    assert "processing" not in kinds
+    assert get_finding(finding_id)["stage"] == "processing"
+
+
+def test_letter_side_effects_are_hidden_once_the_letter_is_ready():
+    action = "Notify the bank of the death and request the balance"
+    events = [
+        {"kind": "identified", "summary": "Accepted as an estate asset", "detail": action, "job_id": None},
+        {"kind": "override", "summary": "Securing skipped", "detail": f"A step was queued before securing: {action}", "job_id": None},
+        {"kind": "processing", "summary": "Disposition set", "detail": f"close: {action}", "job_id": None},
+        {"kind": "letter_queued", "summary": "Letter queued", "detail": action, "job_id": 1},
+        {"kind": "letter_ready", "summary": "Letter ready", "detail": action, "job_id": 1},
+    ]
+    shown = visible_events(events, [{"id": 1, "action": action}])
+    assert [row["kind"] for row in shown] == ["letter_ready"]
 
 
 def test_estate_close_is_blocked_while_a_case_is_open(tmp_path, monkeypatch):
