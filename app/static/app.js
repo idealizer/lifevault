@@ -93,29 +93,37 @@ function setCount(name, value) {
   });
 }
 
+function iconButton(label, kind) {
+  const button = document.createElement("button");
+  button.type = kind === "confirm" ? "button" : "submit";
+  button.className = "btn icon" + (kind === "confirm" ? " primary" : kind === "dismiss" ? " danger" : "");
+  button.setAttribute("aria-label", label);
+  button.title = label;
+  const paths = {
+    confirm: '<path d="M5 12.5 9.5 17 19 7"/>',
+    dismiss: '<path d="M7 7l10 10M17 7 7 17"/>',
+    restore: '<path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5"/>',
+  };
+  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths[kind] + "</svg>";
+  return button;
+}
+
 function paintActions(card, status) {
   const row = card.querySelector("[data-actions]");
   const id = card.dataset.finding;
   const back = currentView();
   row.replaceChildren();
   if (status !== "confirmed") {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "btn primary";
-    button.textContent = "Confirm";
+    const button = iconButton("Confirm", "confirm");
     button.addEventListener("click", () => openStepDialog(card));
     row.appendChild(button);
   }
   const form = document.createElement("form");
   form.method = "post";
   form.action = "/findings/" + id + "/status";
-  const value = status === "dismissed" ? "candidate" : "dismissed";
-  const label = status === "dismissed" ? "Restore" : "Dismiss";
-  form.innerHTML = '<input type="hidden" name="status" value="' + value + '"><input type="hidden" name="back" value="' + back + '">';
-  const button = document.createElement("button");
-  button.className = "btn";
-  button.type = "submit";
-  button.textContent = label;
+  const dismissed = status === "dismissed";
+  form.innerHTML = '<input type="hidden" name="status" value="' + (dismissed ? "candidate" : "dismissed") + '"><input type="hidden" name="back" value="' + back + '">';
+  const button = iconButton(dismissed ? "Restore" : "Dismiss", dismissed ? "restore" : "dismiss");
   form.appendChild(button);
   form.addEventListener("submit", onFindingSubmit);
   row.appendChild(form);

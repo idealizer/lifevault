@@ -189,7 +189,11 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .asset-main strong, .asset-main p { margin: 0; }
 .asset-main p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .asset-side { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
-.asset-side .row { display: flex; gap: 6px; }
+.asset-side .row { display: flex; gap: 4px; align-items: center; }
+.asset-side form { display: flex; }
+.asset-side .btn.icon { width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 999px; background: transparent; }
+.asset-side .btn.icon.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.asset-side .btn.icon.danger:hover { color: var(--danger); border-color: var(--danger); }
 .btn.icon { width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 .btn.icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .message-dialog { width: min(720px, calc(100% - 32px)); }
