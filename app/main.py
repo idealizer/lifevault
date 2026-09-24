@@ -266,14 +266,39 @@ def actions_page():
 
 
 @app.get("/documents")
-def documents_page(request: Request):
+def documents_page(request: Request, stage: str = ""):
     rows = worklist()
-    groups = []
-    for stage, label in STAGE_LABELS.items():
-        items = [row for row in rows if (row.get("stage") or "discovered") == stage]
-        if items:
-            groups.append({"stage": stage, "label": label, "cases": items})
-    return _render(request, "documents.html", page="documents", groups=groups, stage_labels=STAGE_LABELS)
+    counts = {key: 0 for key in STAGE_LABELS}
+    awaiting = 0
+    for row in rows:
+        key = row.get("stage") or "discovered"
+        if key in counts:
+            counts[key] += 1
+        if row.get("awaiting"):
+            awaiting += 1
+    pills = [{"key": "awaiting", "label": "Awaiting reply", "count": awaiting}]
+    pills += [{"key": key, "label": label, "count": counts[key]} for key, label in STAGE_LABELS.items()]
+    allowed = {pill["key"] for pill in pills}
+    if stage not in allowed:
+        if awaiting:
+            stage = "awaiting"
+        else:
+            stage = next((pill["key"] for pill in pills if pill["count"]), "discovered")
+    if stage == "awaiting":
+        cases = [row for row in rows if row.get("awaiting")]
+        label = "Awaiting reply"
+    else:
+        cases = [row for row in rows if (row.get("stage") or "discovered") == stage]
+        label = STAGE_LABELS.get(stage, stage)
+    return _render(
+        request,
+        "documents.html",
+        page="documents",
+        pills=pills,
+        stage=stage,
+        label=label,
+        cases=cases,
+    )
 
 
 @app.get("/cases/{finding_id}")
@@ -282,6 +307,11 @@ def case_page(request: Request, finding_id: int):
     if not row:
         raise HTTPException(404, "That asset is not in the vault.")
     jobs = jobs_for_finding(finding_id)
+    preview = ""
+    for job in reversed(jobs):
+        if job.get("packet_path"):
+            preview = f"/documents/{job['id']}/letter.pdf"
+            break
     return _render(
         request,
         "case.html",
@@ -291,6 +321,7 @@ def case_page(request: Request, finding_id: int):
         events=list_case_events(finding_id),
         documents=list_case_documents(finding_id),
         jobs=jobs,
+        preview_src=preview,
         awaiting=awaiting_reply(finding_id),
         actions=actions_for(row.get("category") or "other"),
     )

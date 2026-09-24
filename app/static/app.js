@@ -700,7 +700,8 @@ function bindFileNames() {
 
 function renderPdf() {
   const host = document.getElementById("pdf-pages");
-  if (!host || !window.pdfjsLib) return;
+  if (!host || !window.pdfjsLib || !host.dataset.src) return;
+  host.replaceChildren();
   pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/pdf.worker.min.js";
   pdfjsLib.getDocument(host.dataset.src).promise.then(async (pdf) => {
     const cssWidth = Math.max(host.clientWidth || 720, 320);
@@ -813,6 +814,29 @@ function bindReplyStatus() {
   });
 }
 
+function bindCaseViewer() {
+  const host = document.getElementById("pdf-pages");
+  if (!host) return;
+  document.querySelectorAll("[data-view-src]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const src = button.dataset.viewSrc || "";
+      if (!src) return;
+      host.dataset.src = src;
+      host.classList.remove("case-empty");
+      if (/\.(png|jpe?g)(\?|$)/i.test(src)) {
+        host.replaceChildren();
+        const image = document.createElement("img");
+        image.src = src;
+        image.alt = "Response";
+        host.appendChild(image);
+        return;
+      }
+      renderPdf();
+    });
+  });
+}
+
+bindCaseViewer();
 bindReplyStatus();
 bindCredentials();
 bindStepDialog();

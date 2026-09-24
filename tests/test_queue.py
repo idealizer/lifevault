@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi.testclient import TestClient
 from fpdf import FPDF
 from pypdf import PdfReader
@@ -40,7 +42,8 @@ def test_cancel_subscription_builds_letter_packet(tmp_path, monkeypatch):
     done = get_job(job_id)
     assert done["status"] == "done"
     assert needs_letter(action)
-    assert packet_filename({"provider": "Example News"}, action).endswith(".pdf")
+    assert packet_filename({"provider": "Example News"}, action) == "ada-example_example-news_cancellation_" + date.today().strftime("%Y%m%d") + ".pdf"
+    assert packet_filename({"provider": "NZZ"}, "Recover the account only if the estate already has access") == "ada-example_nzz_amount-recovery_" + date.today().strftime("%Y%m%d") + ".pdf"
     reader = PdfReader(done["packet_path"])
     assert len(reader.pages) == 2
     text = reader.pages[0].extract_text() or ""

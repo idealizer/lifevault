@@ -137,6 +137,57 @@ _PURPOSE = {
     "Close it": "close_account",
 }
 
+# Short file-name token for each letter purpose.
+_REQUEST_SLUG = {
+    "bank_notify": "balance-request",
+    "statements": "statements",
+    "freeze": "account-freeze",
+    "transfer_balance": "balance-transfer",
+    "close_account": "account-close",
+    "notify_death": "death-notice",
+    "valuation": "valuation",
+    "claim_benefit": "benefit-claim",
+    "transfer_heir": "heir-transfer",
+    "sell": "sale",
+    "record": "record",
+    "access_procedure": "amount-recovery",
+    "transfer_estate": "estate-transfer",
+    "claim_policy": "policy-claim",
+    "policy_schedule": "policy-schedule",
+    "keep_cover": "cover-keep",
+    "cancel": "cancellation",
+    "keep_service": "service-keep",
+    "transfer_contract": "contract-transfer",
+    "final_bill": "final-bill",
+    "end_contract": "contract-end",
+    "tax_return": "tax-return",
+    "refund": "refund",
+    "lawyer": "lawyer-notice",
+    "unpaid": "unpaid-claim",
+    "documents": "documents",
+    "close_role": "role-close",
+    "cancel_later": "cancel-later",
+    "renew": "renewal",
+    "update_contact": "contact-update",
+    "deadline": "deadline",
+    "reply": "correspondence",
+    "close_matter": "matter-close",
+    "memorial": "memorial",
+    "report": "report",
+    "review": "review",
+    "custom": "request",
+}
+
+
+def request_slug(action: str) -> str:
+    purpose = _PURPOSE.get((action or "").strip())
+    if purpose:
+        return _REQUEST_SLUG.get(purpose, "request")
+    words = re.sub(r"[^a-z0-9]+", "-", (action or "").lower()).strip("-").split("-")
+    stop = {"the", "a", "an", "of", "to", "and", "or", "for", "if", "only", "it", "this", "that", "already", "has"}
+    kept = [word for word in words if word and word not in stop][:4]
+    return "-".join(kept) or "request"
+
 
 def detect_language(text: str) -> str:
     sample = " " + re.sub(r"\s+", " ", (text or "").lower()) + " "

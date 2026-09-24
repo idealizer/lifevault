@@ -11,7 +11,7 @@ from pypdf import PdfWriter
 
 from app.config import data_dir
 from app.db import setting
-from app.pipeline.letter_copy import compose, detect_language
+from app.pipeline.letter_copy import compose, detect_language, request_slug
 
 ESTATE_FILES = {
     "death_certificate": "death-certificate",
@@ -97,10 +97,21 @@ def needs_letter(action: str) -> bool:
     return not any(phrase in text for phrase in quiet)
 
 
-def packet_filename(finding: dict, action: str) -> str:
-    provider = finding.get("provider") or finding.get("label") or "estate"
-    slug = re.sub(r"[^A-Za-z0-9]+", "-", f"{provider}-{action}").strip("-")
-    return (slug[:80] or "estate-letter") + ".pdf"
+def packet_filename(finding: dict, action: str, when: date | None = None) -> str:
+    deceased = _file_slug(setting("deceased_name") or "estate")
+    recipient = _file_slug(finding.get("provider") or finding.get("label") or "recipient", drop_suffix=True)
+    request = request_slug(action)
+    day = (when or date.today()).strftime("%Y%m%d")
+    return f"{deceased}_{recipient}_{request}_{day}.pdf"
+
+
+def _file_slug(value: str, drop_suffix: bool = False) -> str:
+    text = (value or "").lower().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+    if drop_suffix:
+        parts = [part for part in text.split("-") if part not in {"ag", "sa", "gmbh", "ltd", "inc", "llc", "bv", "sarl", "sagl"}]
+        text = "-".join(parts)
+    return text or "estate"
 
 
 def write_packet(job_id: int, finding: dict, action: str, source_text: str = "") -> tuple[str, str]:

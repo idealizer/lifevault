@@ -8,30 +8,31 @@
     <p class="muted">Each asset is a case. Letters and replies stay on its paper trail.</p>
   </div>
 </section>
-{% if groups %}
-  {% for group in groups %}
-  <section class="panel">
-    <h2>{{ group.label }} <span class="pill">{{ group.cases|length }}</span></h2>
-    <ul class="documents">
-      {% for item in group.cases %}
-      <li>
-        <div>
-          <strong>{{ item.label or item.provider }}</strong>
-          <p class="muted">{{ item.provider }}{% if item.disposition %} · {{ item.disposition }}{% endif %}</p>
-        </div>
-        <span class="pill status-{{ item.stage }}">{{ group.label }}</span>
-        {% if item.awaiting %}<span class="pill status-awaiting">Awaiting reply</span>{% endif %}
-        <a class="btn icon" href="/cases/{{ item.id }}" aria-label="Open case" title="Open case">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/></svg>
-        </a>
-      </li>
-      {% endfor %}
-    </ul>
-  </section>
+<div class="filters">
+  {% for pill in pills %}
+  <a class="pill {% if stage == pill.key %}on{% endif %}" href="/documents?stage={{ pill.key }}"><span>{{ pill.label }}</span><span class="pill-count">{{ pill.count }}</span></a>
   {% endfor %}
-{% else %}
+</div>
 <section class="panel">
-  <p class="muted">No cases yet. Scan mail to discover assets.</p>
+  <h2>{{ label }} <span class="pill">{{ cases|length }}</span></h2>
+  {% if cases %}
+  <ul class="documents">
+    {% for item in cases %}
+    <li>
+      <div>
+        <strong><a href="/cases/{{ item.id }}">{{ item.label or item.provider }}</a></strong>
+        <p class="muted">{{ item.provider }}{% if item.disposition %} · {{ item.disposition }}{% endif %}</p>
+      </div>
+      <span class="pill status-{{ item.stage }}">{{ item.stage_label }}</span>
+      {% if item.awaiting %}<span class="pill status-awaiting">Awaiting reply</span>{% endif %}
+      <a class="btn icon" href="/cases/{{ item.id }}" aria-label="Open case" title="Open case">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/></svg>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nothing in this status.</p>
+  {% endif %}
 </section>
-{% endif %}
 {% endblock %}
