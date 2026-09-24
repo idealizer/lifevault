@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}{{ finding.label }} — Lifevault{% endblock %}
+{% block content %}
+<section class="vault-head">
+  <div>
+    <p class="kicker"><a href="/documents">Documents</a></p>
+    <h1>{{ finding.label or finding.provider }}</h1>
+    <p class="muted">{{ finding.provider }}{% if finding.asset_kind %} · {{ finding.asset_kind }}{% endif %}{% if finding.disposition %} · {{ finding.disposition }}{% endif %}</p>
+  </div>
+  <span class="pill status-{{ finding.stage }}">{{ stage_label }}</span>
+  {% if awaiting %}<span class="pill status-awaiting">Awaiting reply</span>{% endif %}
+</section>
+
+<section class="panel stack">
+  <h2>Next stage</h2>
+  {% if finding.stage == 'discovered' %}
+  <form method="post" action="/cases/{{ finding.id }}/stage" class="stack">
+    <input type="hidden" name="target" value="identified">
+    <button class="btn primary" type="submit">Identify this asset</button>
+  </form>
+  {% elif finding.stage == 'identified' %}
+  <form method="post" action="/cases/{{ finding.id }}/stage" class="stack">
+    <input type="hidden" name="target" value="secured">
+    <label>How it was secured
+      <textarea name="note" rows="3" required placeholder="Notified the holder, froze the account, or nothing to secure"></textarea>
+    </label>
+    <button class="btn primary" type="submit">Mark secured</button>
+  </form>
+  <form method="post" action="/cases/{{ finding.id }}/stage" class="stack">
+    <input type="hidden" name="target" value="processing">
+    <input type="hidden" name="override" value="1">
+    <label>Disposition
+      <select name="disposition">
+        {% for name in ['transfer','sell','split','payout','claim','cancel','close','keep'] %}
+        <option value="{{ name }}">{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Why securing is skipped
+      <textarea name="note" rows="2" required></textarea>
+    </label>
+    <button class="btn" type="submit">Skip securing and start processing</button>
+  </form>
+  {% elif finding.stage == 'secured' %}
+  <form method="post" action="/cases/{{ finding.id }}/stage" class="stack">
+    <input type="hidden" name="target" value="processing">
+    <label>Disposition
+      <select name="disposition">
+        {% for name in ['transfer','sell','split','payout','claim','cancel','close','keep'] %}
+        <option value="{{ name }}" {% if finding.disposition == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Note
+      <textarea name="note" rows="2" placeholder="What will happen to this asset"></textarea>
+    </label>
+    <button class="btn primary" type="submit">Start processing</button>
+  </form>
+  {% elif finding.stage == 'processing' %}
+  <form method="post" action="/cases/{{ finding.id }}/stage" class="stack">
+    <input type="hidden" name="target" value="closed">
+    <label>Closing note
+      <textarea name="note" rows="3" placeholder="Nothing remains due, or what the reply confirmed"></textarea>
+    </label>
+    <button class="btn primary" type="submit">Close case</button>
+  </form>
+  {% elif finding.stage == 'closed' %}
+  <form method="post" action="/cases/{{ finding.id }}/stage" class="stack">
+    <input type="hidden" name="target" value="processing">
+    <label>Why it is reopened
+      <textarea name="note" rows="2" required></textarea>
+    </label>
+    <button class="btn" type="submit">Reopen</button>
+  </form>
+  {% endif %}
+  {% if finding.stage not in ['closed', 'dismissed'] %}
+  <form method="post" action="/cases/{{ finding.id }}/stage" class="row" data-confirm data-confirm-title="Dismiss this asset?" data-confirm-text="It leaves the estate. The reason stays on the timeline." data-confirm-ok="Dismiss">
+    <input type="hidden" name="target" value="dismissed">
+    <input type="hidden" name="note" value="Dismissed from the case file.">
+    <button class="btn danger" type="submit">Dismiss</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="panel stack">
+  <h2>Correspondence</h2>
+  {% if finding.stage not in ['dismissed'] %}
+  <form method="post" action="/findings/{{ finding.id }}/queue" class="stack" id="case-queue">
+    <input type="hidden" name="redirect" value="1">
+    <label>Queue a letter
+      <select name="action">
+        {% for action in actions %}
+        <option value="{{ action }}">{{ action }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="btn" type="submit">Queue letter</button>
+  </form>
+  {% endif %}
+  <ul class="timeline">
+    {% for job in jobs %}
+    <li id="letter-{{ job.id }}">
+      <span class="pill status-{{ job.status }}">{{ job.status }}</span>
+      <div>
+        <strong>{{ job.action }}</strong>
+        <p class="muted">{{ job.note }}</p>
+        {% if job.packet_path %}
+        <p class="row">
+          <a class="btn" href="/documents/{{ job.id }}/letter.pdf">Read</a>
+          <a class="btn" href="/documents/{{ job.id }}?print=1">Print</a>
+          <a class="btn" href="/queue/{{ job.id }}/packet">Download</a>
+        </p>
+        <form method="post" action="/cases/{{ finding.id }}/sent" class="row">
+          <input type="hidden" name="job_id" value="{{ job.id }}">
+          <button class="btn" type="submit">Mark sent</button>
+        </form>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+    {% for doc in documents if doc.direction == 'in' %}
+    <li>
+      <span class="pill status-received">In</span>
+      <div>
+        <strong>{{ doc.title }}</strong>
+        {% if doc.note %}<p>{{ doc.note }}</p>{% endif %}
+        {% if doc.path %}<p><a href="/cases/{{ finding.id }}/files/{{ doc.id }}">Open file</a></p>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  <form method="post" action="/cases/{{ finding.id }}/reply" enctype="multipart/form-data" class="stack">
+    <h2>Add a response</h2>
+    <label>Answers letter
+      <select name="job_id">
+        <option value="">Not tied to a letter</option>
+        {% for job in jobs %}
+        <option value="{{ job.id }}">{{ job.action }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>File
+      <input type="file" name="reply_file" accept="application/pdf,.pdf,image/png,image/jpeg">
+    </label>
+    <label>Note
+      <textarea name="reply_note" rows="3" placeholder="Paste the reply, or what was said"></textarea>
+    </label>
+    <button class="btn primary" type="submit">Add response</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Timeline</h2>
+  <ol class="timeline">
+    {% for event in events %}
+    <li>
+      <time>{{ event.created_at|replace('T', ' ') }}</time>
+      <strong>{{ event.summary }}</strong>
+      {% if event.detail %}<p class="muted">{{ event.detail }}</p>{% endif %}
+    </li>
+    {% else %}
+    <li class="muted">No events yet.</li>
+    {% endfor %}
+  </ol>
+  <form method="post" action="/cases/{{ finding.id }}/note" class="stack">
+    <label>Add a note
+      <textarea name="note" rows="2" required></textarea>
+    </label>
+    <button class="btn" type="submit">Add note</button>
+  </form>
+</section>
+{% endblock %}

@@ -27,8 +27,13 @@ from app.db import (
     create_source,
     delete_source,
     finding_counts,
+    get_finding,
     get_job,
     get_run,
+    jobs_for_finding,
+    list_case_documents,
+    list_case_events,
+    list_estate_events,
     get_source,
     has_active_run,
     init_db,
@@ -38,10 +43,11 @@ from app.db import (
     list_jobs,
     list_runs,
     list_sources,
+    record_case_event,
+    update_finding_case,
     mask_secret,
     save_action_choice,
     save_finding_guide,
-    set_finding_status,
     set_job_reply,
     set_setting,
     setting,
@@ -49,6 +55,20 @@ from app.db import (
     upsert_message,
 )
 from app.llm.client import ModelError, resolve_llm
+from app.pipeline.cases import (
+    STAGE_LABELS,
+    CaseError,
+    add_note,
+    add_reply,
+    advance,
+    awaiting_reply,
+    close_estate,
+    estate_blockers,
+    mark_sent,
+    on_action_queued,
+    save_estate_checklist,
+    worklist,
+)
 from app.pipeline.guides import build_guide, openai_ready
 from app.pipeline.estate_actions import ESTATE_ACTIONS, actions_for
 from app.pipeline.import_mail import ImportError, parse_mail_file
@@ -89,7 +109,8 @@ def _render(request: Request, name: str, **context):
 
 
 def _vault_context(status: str, category: str) -> dict:
-    if status not in {"active", "candidate", "confirmed", "dismissed", "all"}:
+    allowed = {"active", "candidate", "confirmed", "dismissed", "all", "discovered", "identified", "secured", "processing", "closed"}
+    if status not in allowed:
         status = "active"
     findings = list_findings(status)
     grouped: dict[str, list] = {key: [] for key, _label in CATEGORIES}
@@ -117,6 +138,16 @@ def _vault_context(status: str, category: str) -> dict:
         "scanning": has_active_run(),
         "page": "assets",
         "estate_actions": ESTATE_ACTIONS,
+        "stage_labels": STAGE_LABELS,
+        "estate_closed": setting("estate_closed") == "1",
+        "estate_blockers": estate_blockers(),
+        "estate_debts": setting("estate_debts"),
+        "estate_debts_note": setting("estate_debts_note"),
+        "estate_taxes": setting("estate_taxes"),
+        "estate_taxes_note": setting("estate_taxes_note"),
+        "estate_final_note": setting("estate_final_note"),
+        "estate_discharge_note": setting("estate_discharge_note"),
+        "estate_events": list_estate_events(),
     }
 
 
@@ -236,26 +267,140 @@ def actions_page():
 
 @app.get("/documents")
 def documents_page(request: Request):
-    return _render(request, "documents.html", page="documents", jobs=list_jobs())
+    rows = worklist()
+    groups = []
+    for stage, label in STAGE_LABELS.items():
+        items = [row for row in rows if (row.get("stage") or "discovered") == stage]
+        if items:
+            groups.append({"stage": stage, "label": label, "cases": items})
+    return _render(request, "documents.html", page="documents", groups=groups, stage_labels=STAGE_LABELS)
+
+
+@app.get("/cases/{finding_id}")
+def case_page(request: Request, finding_id: int):
+    row = get_finding(finding_id)
+    if not row:
+        raise HTTPException(404, "That asset is not in the vault.")
+    jobs = jobs_for_finding(finding_id)
+    return _render(
+        request,
+        "case.html",
+        page="documents",
+        finding=row,
+        stage_label=STAGE_LABELS.get(row.get("stage") or "", "Discovered"),
+        events=list_case_events(finding_id),
+        documents=list_case_documents(finding_id),
+        jobs=jobs,
+        awaiting=awaiting_reply(finding_id),
+        actions=actions_for(row.get("category") or "other"),
+    )
+
+
+@app.post("/cases/{finding_id}/stage")
+def case_stage(
+    finding_id: int,
+    target: str = Form(""),
+    note: str = Form(""),
+    disposition: str = Form(""),
+    override: str = Form(""),
+):
+    try:
+        advance(finding_id, target, note, disposition, override == "1")
+    except CaseError as exc:
+        return _redirect(f"/cases/{finding_id}", str(exc), "error")
+    return _redirect(f"/cases/{finding_id}", "Stage updated.")
+
+
+@app.post("/cases/{finding_id}/note")
+def case_note(finding_id: int, note: str = Form("")):
+    try:
+        add_note(finding_id, note)
+    except CaseError as exc:
+        return _redirect(f"/cases/{finding_id}", str(exc), "error")
+    return _redirect(f"/cases/{finding_id}", "Note added.")
+
+
+@app.post("/cases/{finding_id}/reply")
+async def case_reply(
+    finding_id: int,
+    reply_note: str = Form(""),
+    job_id: str = Form(""),
+    reply_file: UploadFile | None = File(None),
+):
+    stored = ""
+    number = int(job_id) if job_id.strip().isdigit() else None
+    try:
+        if reply_file and reply_file.filename:
+            stored = save_reply_file(number or finding_id, reply_file.filename, await reply_file.read())
+        add_reply(finding_id, reply_note, stored, number)
+    except (CaseError, ValueError) as exc:
+        return _redirect(f"/cases/{finding_id}", str(exc), "error")
+    if number:
+        set_job_reply(number, "received", reply_note.strip(), stored or None)
+    return _redirect(f"/cases/{finding_id}", "Response added.")
+
+
+@app.post("/cases/{finding_id}/sent")
+def case_sent(finding_id: int, job_id: int = Form(...)):
+    try:
+        mark_sent(finding_id, job_id)
+    except CaseError as exc:
+        return _redirect(f"/cases/{finding_id}", str(exc), "error")
+    return _redirect(f"/cases/{finding_id}", "Marked sent.")
+
+
+@app.get("/cases/{finding_id}/files/{document_id}")
+def case_file(finding_id: int, document_id: int):
+    match = next((row for row in list_case_documents(finding_id) if row["id"] == document_id), None)
+    if not match or not match.get("path"):
+        raise HTTPException(404, "That file is not stored.")
+    path = Path(match["path"])
+    if match.get("direction") == "in":
+        stored = reply_path(path.name)
+        path = stored or path
+    if not path.is_file():
+        raise HTTPException(404, "That file is not stored.")
+    media = "application/pdf" if path.suffix.lower() == ".pdf" else "application/octet-stream"
+    if path.suffix.lower() in {".jpg", ".jpeg"}:
+        media = "image/jpeg"
+    elif path.suffix.lower() == ".png":
+        media = "image/png"
+    return FileResponse(path, media_type=media, content_disposition_type="inline", filename=path.name)
+
+
+@app.post("/estate/checklist")
+def estate_checklist(
+    debts: str = Form(""),
+    debts_note: str = Form(""),
+    taxes: str = Form(""),
+    taxes_note: str = Form(""),
+    final_note: str = Form(""),
+    discharge_note: str = Form(""),
+):
+    save_estate_checklist(debts, debts_note, taxes, taxes_note, final_note, discharge_note)
+    return _redirect("/", "Checklist saved.")
+
+
+@app.post("/estate/close")
+def estate_close():
+    try:
+        close_estate()
+    except CaseError as exc:
+        return _redirect("/", str(exc), "error")
+    return _redirect("/", "Estate closed.")
 
 
 @app.get("/documents/{job_id}")
-def document_page(request: Request, job_id: int):
+def document_page(request: Request, job_id: int, print: int = 0):
     job = get_job(job_id)
     if not job or not job.get("packet_path"):
         raise HTTPException(404, "That document is not ready.")
     path = Path(job["packet_path"])
     if not path.is_file():
         raise HTTPException(404, "That document is not ready.")
-    return _render(
-        request,
-        "document.html",
-        page="documents",
-        job=job,
-        filename=path.name.split("-", 2)[-1],
-        reply_status=job.get("reply_status") or "awaiting",
-        reply_name=Path(job.get("reply_file") or "").name,
-    )
+    if print:
+        return queue_packet(job_id, inline=1)
+    return RedirectResponse(f"/cases/{job['finding_id']}#letter-{job_id}", status_code=302)
 
 
 @app.post("/documents/{job_id}/reply")
@@ -283,8 +428,13 @@ async def document_reply(
             "Add the response file or a note before marking it received.",
             "error",
         )
+    if status == "received":
+        try:
+            add_reply(int(job["finding_id"]), note, stored or "", job_id)
+        except CaseError as exc:
+            return _redirect(f"/cases/{job['finding_id']}", str(exc), "error")
     set_job_reply(job_id, status, note, stored)
-    return _redirect(f"/documents/{job_id}", "Status saved.")
+    return _redirect(f"/cases/{job['finding_id']}", "Status saved.")
 
 
 @app.get("/documents/{job_id}/reply-file")
@@ -349,6 +499,7 @@ def queue_finding(
     finding_id: int,
     action: list[str] = Form(default=[]),
     note: list[str] = Form(default=[]),
+    redirect: str = Form(""),
 ):
     rows = [row for row in list_findings("all") if row["id"] == finding_id]
     if not rows:
@@ -365,10 +516,22 @@ def queue_finding(
             chosen.append(text)
     if not chosen:
         raise HTTPException(400, "Choose a listed step or write your own.")
-    set_finding_status(finding_id, "confirmed")
+    try:
+        on_action_queued(finding_id, chosen[0])
+    except CaseError as exc:
+        raise HTTPException(400, str(exc)) from exc
     save_action_choice(finding_id, chosen[0], " · ".join(chosen[1:])[:500])
     job_ids = [enqueue_job(finding_id, item) for item in chosen]
-    return {"ok": True, "status": "confirmed", "job_id": job_ids[0], "job_ids": job_ids, "counts": finding_counts()}
+    if redirect == "1":
+        return _redirect(f"/cases/{finding_id}", "Letter queued.")
+    row = get_finding(finding_id)
+    return {
+        "ok": True,
+        "status": (row or {}).get("stage") or "processing",
+        "job_id": job_ids[0],
+        "job_ids": job_ids,
+        "counts": finding_counts(),
+    }
 
 
 def _finding_row(finding_id: int) -> dict:
@@ -795,10 +958,27 @@ def update_finding_status(
 ):
     if status not in {"candidate", "confirmed", "dismissed"}:
         raise HTTPException(400)
-    if back not in {"active", "candidate", "confirmed", "dismissed", "all"}:
+    if back not in {"active", "candidate", "confirmed", "dismissed", "all", "discovered", "identified", "secured", "processing", "closed"}:
         back = "active"
-    set_finding_status(finding_id, status)
+    row = get_finding(finding_id)
+    if not row:
+        raise HTTPException(404, "That asset is not in the vault.")
+    try:
+        if status == "dismissed":
+            advance(finding_id, "dismissed", "Dismissed from the asset list.")
+            stage = "dismissed"
+        elif status == "confirmed" and row.get("stage") == "discovered":
+            advance(finding_id, "identified")
+            stage = "identified"
+        elif status == "candidate" and row.get("stage") == "dismissed":
+            update_finding_case(finding_id, "discovered", "candidate")
+            record_case_event(finding_id, "restored", "Restored", "Returned to Discovered.")
+            stage = "discovered"
+        else:
+            stage = row.get("stage") or "discovered"
+    except CaseError as exc:
+        raise HTTPException(400, str(exc)) from exc
     if request.headers.get("x-requested-with") == "fetch":
         counts = finding_counts()
-        return {"ok": True, "status": status, "counts": counts}
+        return {"ok": True, "status": stage, "counts": counts}
     return _redirect(f"/?status={back}", "Inventory updated")

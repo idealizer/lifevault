@@ -129,6 +129,37 @@ def _ensure_message_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE findings ADD COLUMN action_status TEXT NOT NULL DEFAULT ''")
     if "guide_json" not in finding_columns:
         conn.execute("ALTER TABLE findings ADD COLUMN guide_json TEXT NOT NULL DEFAULT ''")
+    for name in ("stage", "disposition", "disposition_note"):
+        if name not in finding_columns:
+            conn.execute(f"ALTER TABLE findings ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS case_events (
+            id INTEGER PRIMARY KEY,
+            finding_id INTEGER NOT NULL DEFAULT 0,
+            kind TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            detail TEXT NOT NULL DEFAULT '',
+            job_id INTEGER,
+            document_path TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS case_documents (
+            id INTEGER PRIMARY KEY,
+            finding_id INTEGER NOT NULL,
+            job_id INTEGER,
+            direction TEXT NOT NULL,
+            title TEXT NOT NULL,
+            path TEXT NOT NULL DEFAULT '',
+            note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS jobs (
@@ -179,6 +210,99 @@ def _ensure_message_columns(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    _migrate_case_stages(conn)
+
+
+def _migrate_case_stages(conn: sqlite3.Connection) -> None:
+    now = utc_now()
+    for row in conn.execute("SELECT id, status, stage FROM findings").fetchall():
+        if str(row["stage"] or "").strip():
+            continue
+        status = row["status"] or "candidate"
+        if status == "dismissed":
+            stage = "dismissed"
+        elif status == "confirmed":
+            sent = conn.execute(
+                "SELECT id FROM jobs WHERE finding_id = ? AND packet_path != '' LIMIT 1",
+                (row["id"],),
+            ).fetchone()
+            stage = "processing" if sent else "identified"
+        else:
+            stage = "discovered"
+        conn.execute("UPDATE findings SET stage = ? WHERE id = ?", (stage, row["id"]))
+    for row in conn.execute("SELECT id, stage FROM findings").fetchall():
+        exists = conn.execute(
+            "SELECT id FROM case_events WHERE finding_id = ? LIMIT 1",
+            (row["id"],),
+        ).fetchone()
+        if exists:
+            continue
+        conn.execute(
+            """
+            INSERT INTO case_events(finding_id, kind, summary, detail, document_path, created_at)
+            VALUES(?, 'discovered', 'Discovered from mail', '', '', ?)
+            """,
+            (row["id"], now),
+        )
+        stage = row["stage"] or "discovered"
+        if stage in {"identified", "secured", "processing", "closed"}:
+            conn.execute(
+                """
+                INSERT INTO case_events(finding_id, kind, summary, detail, document_path, created_at)
+                VALUES(?, 'identified', 'Accepted as an estate asset', '', '', ?)
+                """,
+                (row["id"], now),
+            )
+        if stage in {"processing", "closed"}:
+            conn.execute(
+                """
+                INSERT INTO case_events(finding_id, kind, summary, detail, document_path, created_at)
+                VALUES(?, 'processing', 'A letter was already on file', '', '', ?)
+                """,
+                (row["id"], now),
+            )
+    for job in conn.execute("SELECT * FROM jobs").fetchall():
+        if job["packet_path"]:
+            outgoing = conn.execute(
+                "SELECT id FROM case_documents WHERE job_id = ? AND direction = 'out' LIMIT 1",
+                (job["id"],),
+            ).fetchone()
+            if not outgoing:
+                title = str(job["packet_path"]).replace("\\", "/").rsplit("/", 1)[-1].split("-", 2)[-1]
+                conn.execute(
+                    """
+                    INSERT INTO case_documents(finding_id, job_id, direction, title, path, note, created_at)
+                    VALUES(?, ?, 'out', ?, ?, '', ?)
+                    """,
+                    (job["finding_id"], job["id"], title or "Letter", job["packet_path"], now),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO case_events(finding_id, kind, summary, detail, job_id, document_path, created_at)
+                    VALUES(?, 'letter_ready', 'Letter ready', ?, ?, ?, ?)
+                    """,
+                    (job["finding_id"], job["action"] or "", job["id"], job["packet_path"], now),
+                )
+        if (job["reply_file"] or job["reply_note"]) and (job["reply_status"] or "") == "received":
+            incoming = conn.execute(
+                "SELECT id FROM case_documents WHERE job_id = ? AND direction = 'in' LIMIT 1",
+                (job["id"],),
+            ).fetchone()
+            if not incoming:
+                conn.execute(
+                    """
+                    INSERT INTO case_documents(finding_id, job_id, direction, title, path, note, created_at)
+                    VALUES(?, ?, 'in', 'Response', ?, ?, ?)
+                    """,
+                    (job["finding_id"], job["id"], job["reply_file"] or "", job["reply_note"] or "", now),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO case_events(finding_id, kind, summary, detail, job_id, document_path, created_at)
+                    VALUES(?, 'reply', 'Response received', ?, ?, ?, ?)
+                    """,
+                    (job["finding_id"], job["reply_note"] or "", job["id"], job["reply_file"] or "", now),
+                )
 
 
 def _rows(sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
@@ -350,6 +474,8 @@ def drop_analysed_mail() -> dict[str, int]:
                 "findings": int(conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]),
             }
             conn.execute("DELETE FROM evidence")
+            conn.execute("DELETE FROM case_documents")
+            conn.execute("DELETE FROM case_events")
             conn.execute("DELETE FROM findings")
             conn.execute("DELETE FROM jobs")
             conn.execute("DELETE FROM messages")
@@ -639,6 +765,46 @@ def has_active_run() -> bool:
     return row is not None
 
 
+def _stage_for_status(status: str) -> str:
+    if status == "dismissed":
+        return "dismissed"
+    if status == "confirmed":
+        return "identified"
+    return "discovered"
+
+
+def _unseen_evidence(conn: sqlite3.Connection, finding_id: int, evidence_rows: list[dict[str, Any]]) -> bool:
+    for item in evidence_rows:
+        row = conn.execute(
+            """
+            SELECT id FROM evidence
+            WHERE finding_id = ? AND source_id IS ? AND external_id = ?
+            """,
+            (finding_id, item.get("source_id"), item.get("external_id") or ""),
+        ).fetchone()
+        if not row:
+            return True
+    return False
+
+
+def _insert_event(
+    conn: sqlite3.Connection,
+    finding_id: int,
+    kind: str,
+    summary: str,
+    detail: str,
+    job_id: int | None,
+    document_path: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO case_events(finding_id, kind, summary, detail, job_id, document_path, created_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?)
+        """,
+        (finding_id, kind, summary[:300], detail[:4000], job_id, document_path, utc_now()),
+    )
+
+
 def save_finding(record: dict[str, Any], evidence_rows: list[dict[str, Any]]) -> int:
     now = utc_now()
     with _lock:
@@ -648,8 +814,16 @@ def save_finding(record: dict[str, Any], evidence_rows: list[dict[str, Any]]) ->
                 "SELECT * FROM findings WHERE merge_key = ?",
                 (record["merge_key"],),
             ).fetchone()
+            reopened = False
             if existing:
                 finding_id = int(existing["id"])
+                status = record["status"]
+                stage = existing["stage"] or _stage_for_status(status)
+                fresh = _unseen_evidence(conn, finding_id, evidence_rows)
+                if stage == "closed" and fresh:
+                    stage = "identified"
+                    status = "confirmed"
+                    reopened = True
                 conn.execute(
                     """
                     UPDATE findings SET
@@ -660,6 +834,7 @@ def save_finding(record: dict[str, Any], evidence_rows: list[dict[str, Any]]) ->
                         identifiers_json = ?,
                         confidence = ?,
                         status = ?,
+                        stage = ?,
                         updated_at = ?
                     WHERE id = ?
                     """,
@@ -670,18 +845,21 @@ def save_finding(record: dict[str, Any], evidence_rows: list[dict[str, Any]]) ->
                         record["label"],
                         json.dumps(record["identifiers"]),
                         record["confidence"],
-                        record["status"],
+                        status,
+                        stage,
                         now,
                         finding_id,
                     ),
                 )
             else:
+                status = record.get("status") or "candidate"
+                stage = record.get("stage") or _stage_for_status(status)
                 cur = conn.execute(
                     """
                     INSERT INTO findings(
                         category, provider, asset_kind, label, identifiers_json,
-                        confidence, status, merge_key, created_at, updated_at
-                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        confidence, status, stage, merge_key, created_at, updated_at
+                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         record["category"],
@@ -690,13 +868,15 @@ def save_finding(record: dict[str, Any], evidence_rows: list[dict[str, Any]]) ->
                         record["label"],
                         json.dumps(record["identifiers"]),
                         record["confidence"],
-                        record.get("status") or "candidate",
+                        status,
+                        stage,
                         record["merge_key"],
                         now,
                         now,
                     ),
                 )
                 finding_id = int(cur.lastrowid)
+                _insert_event(conn, finding_id, "discovered", "Discovered from mail", "", None, "")
             for item in evidence_rows:
                 conn.execute(
                     """
@@ -719,6 +899,19 @@ def save_finding(record: dict[str, Any], evidence_rows: list[dict[str, Any]]) ->
                         (item.get("excerpt") or "")[:500],
                     ),
                 )
+            if reopened:
+                _insert_event(
+                    conn,
+                    finding_id,
+                    "reopened",
+                    "New mail arrived after the case was closed",
+                    "Moved back to Identified.",
+                    None,
+                    "",
+                )
+                conn.execute(
+                    "INSERT INTO settings(key, value) VALUES('estate_closed', '') ON CONFLICT(key) DO UPDATE SET value = ''"
+                )
             conn.commit()
             return finding_id
         finally:
@@ -728,11 +921,18 @@ def save_finding(record: dict[str, Any], evidence_rows: list[dict[str, Any]]) ->
 def list_findings(status_filter: str = "active") -> list[dict[str, Any]]:
     sql = "SELECT * FROM findings"
     params: tuple[Any, ...] = ()
-    if status_filter == "active":
-        sql += " WHERE status IN ('candidate', 'confirmed')"
-    elif status_filter in {"candidate", "confirmed", "dismissed"}:
-        sql += " WHERE status = ?"
+    stages = ("discovered", "identified", "secured", "processing", "closed", "dismissed")
+    if status_filter in stages:
+        sql += " WHERE stage = ?"
         params = (status_filter,)
+    elif status_filter == "active":
+        sql += " WHERE stage NOT IN ('closed', 'dismissed')"
+    elif status_filter == "candidate":
+        sql += " WHERE stage = 'discovered'"
+    elif status_filter == "confirmed":
+        sql += " WHERE stage IN ('identified', 'secured', 'processing', 'closed')"
+    elif status_filter == "all":
+        pass
     sql += " ORDER BY confidence DESC, provider COLLATE NOCASE"
     with _lock:
         rows = _rows(sql, params)
@@ -756,6 +956,7 @@ def finding_counts() -> dict[str, int]:
         counts[str(row["status"])] = int(row["n"])
     counts["active"] = counts["candidate"] + counts["confirmed"]
     counts["all"] = counts["active"] + counts["dismissed"]
+    counts.update(stage_counts())
     return counts
 
 
@@ -805,8 +1006,10 @@ def enqueue_job(finding_id: int, action: str) -> int:
                 """,
                 (finding_id, action[:500], now, now),
             )
+            event_id = int(cur.lastrowid)
+            _insert_event(conn, finding_id, "letter_queued", "Letter queued", action[:500], event_id, "")
             conn.commit()
-            return int(cur.lastrowid)
+            return event_id
         finally:
             conn.close()
 
@@ -843,6 +1046,26 @@ def finish_job(job_id: int, status: str, note: str, packet_path: str = "") -> No
                 """,
                 (status, note[:500], packet_path, utc_now(), job_id),
             )
+            if status == "done" and packet_path:
+                job = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+                if job:
+                    title = str(packet_path).replace("\\", "/").rsplit("/", 1)[-1].split("-", 2)[-1]
+                    conn.execute(
+                        """
+                        INSERT INTO case_documents(finding_id, job_id, direction, title, path, note, created_at)
+                        VALUES(?, ?, 'out', ?, ?, ?, ?)
+                        """,
+                        (job["finding_id"], job_id, title or "Letter", packet_path, note[:500], utc_now()),
+                    )
+                    _insert_event(
+                        conn,
+                        int(job["finding_id"]),
+                        "letter_ready",
+                        "Letter ready",
+                        job["action"] or "",
+                        job_id,
+                        packet_path,
+                    )
             conn.commit()
         finally:
             conn.close()
@@ -931,3 +1154,144 @@ def load_finding_row(merge_key: str) -> dict[str, Any] | None:
         return None
     row["identifiers"] = json.loads(row.pop("identifiers_json") or "[]")
     return row
+
+
+def _hydrate_finding(row: dict[str, Any]) -> dict[str, Any]:
+    row["identifiers"] = json.loads(row.pop("identifiers_json") or "[]")
+    row["stage"] = row.get("stage") or _stage_for_status(row.get("status") or "candidate")
+    return row
+
+
+def get_finding(finding_id: int) -> dict[str, Any] | None:
+    with _lock:
+        row = _one("SELECT * FROM findings WHERE id = ?", (finding_id,))
+    if not row:
+        return None
+    return _hydrate_finding(row)
+
+
+def update_finding_case(
+    finding_id: int,
+    stage: str,
+    status: str,
+    disposition: str | None = None,
+    disposition_note: str | None = None,
+) -> None:
+    with _lock:
+        conn = connect()
+        try:
+            fields = ["stage = ?", "status = ?", "updated_at = ?"]
+            values: list[Any] = [stage, status, utc_now()]
+            if disposition is not None:
+                fields.append("disposition = ?")
+                values.append(disposition[:40])
+            if disposition_note is not None:
+                fields.append("disposition_note = ?")
+                values.append(disposition_note[:500])
+            values.append(finding_id)
+            conn.execute(f"UPDATE findings SET {', '.join(fields)} WHERE id = ?", values)
+            if stage not in {"closed", "dismissed"}:
+                conn.execute(
+                    "INSERT INTO settings(key, value) VALUES('estate_closed', '') ON CONFLICT(key) DO UPDATE SET value = ''"
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def record_case_event(
+    finding_id: int,
+    kind: str,
+    summary: str,
+    detail: str = "",
+    job_id: int | None = None,
+    document_path: str = "",
+) -> None:
+    with _lock:
+        conn = connect()
+        try:
+            _insert_event(conn, finding_id, kind, summary, detail, job_id, document_path)
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def list_case_events(finding_id: int) -> list[dict[str, Any]]:
+    with _lock:
+        return _rows(
+            """
+            SELECT * FROM case_events
+            WHERE finding_id = ?
+            ORDER BY created_at, id
+            """,
+            (finding_id,),
+        )
+
+
+def list_estate_events() -> list[dict[str, Any]]:
+    with _lock:
+        return _rows(
+            """
+            SELECT * FROM case_events
+            WHERE finding_id = 0
+            ORDER BY created_at, id
+            """
+        )
+
+
+def add_case_document(
+    finding_id: int,
+    direction: str,
+    title: str,
+    path: str = "",
+    note: str = "",
+    job_id: int | None = None,
+) -> int:
+    with _lock:
+        conn = connect()
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO case_documents(finding_id, job_id, direction, title, path, note, created_at)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
+                """,
+                (finding_id, job_id, direction, title[:200], path, note[:8000], utc_now()),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+        finally:
+            conn.close()
+
+
+def list_case_documents(finding_id: int) -> list[dict[str, Any]]:
+    with _lock:
+        return _rows(
+            """
+            SELECT * FROM case_documents
+            WHERE finding_id = ?
+            ORDER BY created_at, id
+            """,
+            (finding_id,),
+        )
+
+
+def jobs_for_finding(finding_id: int) -> list[dict[str, Any]]:
+    with _lock:
+        return _rows(
+            "SELECT * FROM jobs WHERE finding_id = ? ORDER BY id",
+            (finding_id,),
+        )
+
+
+def stage_counts() -> dict[str, int]:
+    keys = ("discovered", "identified", "secured", "processing", "closed", "dismissed")
+    counts = {key: 0 for key in keys}
+    with _lock:
+        rows = _rows("SELECT stage, COUNT(*) AS n FROM findings GROUP BY stage")
+    for row in rows:
+        key = str(row["stage"] or "discovered")
+        if key in counts:
+            counts[key] = int(row["n"])
+    counts["open"] = counts["discovered"] + counts["identified"] + counts["secured"] + counts["processing"]
+    counts["in_process"] = counts["secured"] + counts["processing"]
+    return counts

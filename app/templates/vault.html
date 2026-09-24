@@ -5,7 +5,7 @@
   <div>
     <p class="kicker">Digital estate</p>
     <h1>Assets</h1>
-    <p class="muted">Accounts, domains, subscriptions, and risks found in connected mail.</p>
+    <p class="muted">Discover assets in mail, then identify, secure, process, and close each one.</p>
   </div>
   <a class="btn primary" href="/mailboxes">Scan mail</a>
 </section>
@@ -15,15 +15,15 @@
 {% endif %}
 
 <section class="stats">
-  <article><strong data-count="view">{{ total }}</strong><span>In view</span></article>
-  <article><strong data-count="candidate">{{ counts.candidate }}</strong><span>To review</span></article>
-  <article><strong data-count="confirmed">{{ counts.confirmed }}</strong><span>Confirmed</span></article>
-  <article><strong data-count="risks">{{ risks }}</strong><span>Risks</span></article>
+  <article><strong data-count="discovered">{{ counts.discovered }}</strong><span>To identify</span></article>
+  <article><strong data-count="identified">{{ counts.identified }}</strong><span>To secure</span></article>
+  <article><strong data-count="in_process">{{ counts.in_process }}</strong><span>In process</span></article>
+  <article><strong data-count="closed">{{ counts.closed }}</strong><span>Closed</span></article>
 </section>
 
 <div class="filters">
-  {% for key, label in [('active','Active'), ('candidate','Review'), ('confirmed','Confirmed'), ('dismissed','Dismissed'), ('all','All')] %}
-  <a class="pill {% if status == key and not category %}on{% endif %}" href="/?status={{ key }}"><span>{{ label }}</span><span class="pill-count" data-count="{{ key }}">{{ counts[key] }}</span></a>
+  {% for key, label in [('active','Open'), ('discovered','Discovered'), ('identified','Identified'), ('secured','Secured'), ('processing','Processing'), ('closed','Closed'), ('dismissed','Dismissed'), ('all','All')] %}
+  <a class="pill {% if status == key and not category %}on{% endif %}" href="/?status={{ key }}"><span>{{ label }}</span><span class="pill-count" data-count="{{ 'open' if key == 'active' else key }}">{{ counts.open if key == 'active' else counts[key] }}</span></a>
   {% endfor %}
 </div>
 
@@ -45,9 +45,9 @@
     <h2>{{ section.label }} <span class="pill js-section-count">{{ section.findings|length }}</span></h2>
     <ul class="assets">
       {% for item in section.findings %}
-      <li class="asset" data-finding="{{ item.id }}" data-status="{{ item.status }}" data-category="{{ section.key }}">
+      <li class="asset" data-finding="{{ item.id }}" data-status="{{ item.stage or item.status }}" data-category="{{ section.key }}">
         <div class="asset-main">
-          <strong>{{ item.label }}</strong>
+          <strong><a href="/cases/{{ item.id }}">{{ item.label }}</a></strong>
           <p class="muted">{{ item.provider }}{% if item.asset_kind %} · {{ item.asset_kind }}{% endif %}{% if item.identifiers %} · {{ item.identifiers[0].type }} {{ item.identifiers[0].value }}{% endif %}</p>
         </div>
         <div class="asset-side">
@@ -65,7 +65,7 @@
           </button>
           {% endif %}
           <span class="pill conf {% if item.confidence >= 0.75 %}high{% elif item.confidence >= 0.45 %}mid{% else %}low{% endif %}">{{ '%.0f'|format(item.confidence * 100) }}%</span>
-          <span class="pill js-status status-{{ item.status }}">{{ item.status }}</span>
+          <span class="pill js-status status-{{ item.stage or 'discovered' }}">{{ stage_labels.get(item.stage, item.stage or 'Discovered') }}</span>
           <div class="row" data-actions></div>
         </div>
       </li>
@@ -79,4 +79,55 @@
   <a class="btn primary" href="/mailboxes">Connect a mailbox</a>
 </section>
 {% endif %}
+
+<section class="panel stack" id="estate-close">
+  <h2>Close the estate {% if estate_closed %}<span class="pill status-closed">Closed</span>{% endif %}</h2>
+  <p class="muted">The estate stays open until every asset is closed or dismissed, the authority documents are on file, and debts, taxes, the final account, and the discharge are recorded.</p>
+  {% if estate_blockers and not estate_closed %}
+  <ul>
+    {% for item in estate_blockers %}
+    <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <form method="post" action="/estate/checklist" class="stack">
+    <label>Debts
+      <select name="debts">
+        <option value="">Not recorded</option>
+        <option value="reserved" {% if estate_debts == 'reserved' %}selected{% endif %}>Reserved</option>
+        <option value="paid" {% if estate_debts == 'paid' %}selected{% endif %}>Paid</option>
+      </select>
+    </label>
+    <label>Debts note
+      <input name="debts_note" value="{{ estate_debts_note }}">
+    </label>
+    <label>Taxes
+      <select name="taxes">
+        <option value="">Not recorded</option>
+        <option value="reserved" {% if estate_taxes == 'reserved' %}selected{% endif %}>Reserved</option>
+        <option value="paid" {% if estate_taxes == 'paid' %}selected{% endif %}>Paid</option>
+      </select>
+    </label>
+    <label>Taxes note
+      <input name="taxes_note" value="{{ estate_taxes_note }}">
+    </label>
+    <label>Final account
+      <textarea name="final_note" rows="2">{{ estate_final_note }}</textarea>
+    </label>
+    <label>Discharge
+      <textarea name="discharge_note" rows="2">{{ estate_discharge_note }}</textarea>
+    </label>
+    <button class="btn" type="submit">Save checklist</button>
+  </form>
+  <form method="post" action="/estate/close" data-confirm data-confirm-title="Close the estate?" data-confirm-text="This records that administration is finished. Reopening any asset opens the estate again." data-confirm-ok="Close estate">
+    <button class="btn primary" type="submit">Close estate</button>
+  </form>
+  {% if estate_events %}
+  <ol class="timeline">
+    {% for event in estate_events %}
+    <li><time>{{ event.created_at|replace('T', ' ') }}</time> <strong>{{ event.summary }}</strong></li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</section>
 {% endblock %}

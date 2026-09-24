@@ -135,7 +135,13 @@ html.dark .pill.on, html.dark .status-confirmed, html.dark .conf.high { color: #
 html.dark .status-awaiting { color: #1a140c; }
 .status-received { background: var(--success); color: #fff; }
 html.dark .status-received { color: #14241c; }
-.status-running, .status-queued, .status-stopping, .conf.mid, .status-candidate { background: transparent; color: var(--alert); border: 1px solid var(--alert); }
+.status-running, .status-queued, .status-stopping, .conf.mid, .status-candidate, .status-discovered, .status-identified { background: transparent; color: var(--alert); border: 1px solid var(--alert); }
+.status-secured, .status-processing { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.status-closed { background: var(--success); color: #fff; }
+html.dark .status-closed { color: #14241c; }
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.timeline li { display: flex; gap: 12px; align-items: flex-start; }
+.timeline time, .timeline .muted { color: var(--muted); }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }
 .muted, .fine, q { color: var(--muted); }
 .mono { font-family: Consolas, "Courier New", monospace; word-break: break-all; }

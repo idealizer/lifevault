@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fpdf import FPDF
@@ -78,9 +78,8 @@ def save_reply_file(job_id: int, filename: str, raw: bytes) -> str:
         raise ValueError("That file is larger than 15 MB.")
     folder = data_dir() / "replies"
     folder.mkdir(parents=True, exist_ok=True)
-    for old in folder.glob(f"job-{job_id}.*"):
-        old.unlink()
-    name = f"job-{job_id}{suffix}"
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    name = f"job-{job_id}-{stamp}{suffix}"
     (folder / name).write_bytes(raw)
     return name
 

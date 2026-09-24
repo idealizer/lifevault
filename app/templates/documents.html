@@ -5,35 +5,33 @@
   <div>
     <p class="kicker">Executor</p>
     <h1>Documents</h1>
-    <p class="muted">Letters generated from confirmed assets. Open one to read it here.</p>
+    <p class="muted">Each asset is a case. Letters and replies stay on its paper trail.</p>
   </div>
 </section>
-<ul class="documents" id="queue-list">
-  {% for job in jobs %}
-  <li data-job="{{ job.id }}">
-    <div>
-      <strong>{{ job.packet_path.split('-', 2)[-1] if job.packet_path else (job.label or 'Asset') }}</strong>
-      <p class="muted">{{ job.provider }} · {{ job.action }}</p>
-    </div>
-    {% if job.packet_path %}
-    <span class="pill status-{{ job.reply_status or 'awaiting' }}">{% if job.reply_status == 'received' %}Response received{% else %}Awaiting response{% endif %}</span>
-    {% else %}
-    <span class="pill status-{{ job.status }}">{{ job.status }}</span>
-    {% endif %}
-    {% if job.packet_path %}
-    <a class="btn icon" href="/documents/{{ job.id }}" aria-label="View" title="View">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/></svg>
-    </a>
-    <a class="btn icon" href="/documents/{{ job.id }}?print=1" aria-label="Print" title="Print">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
-    </a>
-    <a class="btn icon" href="/queue/{{ job.id }}/packet" aria-label="Download" title="Download">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>
-    </a>
-    {% endif %}
-  </li>
-  {% else %}
-  <li class="muted">No documents yet. Confirm an asset in the vault and queue a step.</li>
+{% if groups %}
+  {% for group in groups %}
+  <section class="panel">
+    <h2>{{ group.label }} <span class="pill">{{ group.cases|length }}</span></h2>
+    <ul class="documents">
+      {% for item in group.cases %}
+      <li>
+        <div>
+          <strong>{{ item.label or item.provider }}</strong>
+          <p class="muted">{{ item.provider }}{% if item.disposition %} · {{ item.disposition }}{% endif %}</p>
+        </div>
+        <span class="pill status-{{ item.stage }}">{{ group.label }}</span>
+        {% if item.awaiting %}<span class="pill status-awaiting">Awaiting reply</span>{% endif %}
+        <a class="btn icon" href="/cases/{{ item.id }}" aria-label="Open case" title="Open case">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/></svg>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
   {% endfor %}
-</ul>
+{% else %}
+<section class="panel">
+  <p class="muted">No cases yet. Scan mail to discover assets.</p>
+</section>
+{% endif %}
 {% endblock %}

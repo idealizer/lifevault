@@ -128,8 +128,8 @@ function paintActions(card, status) {
   const id = card.dataset.finding;
   const back = currentView();
   row.replaceChildren();
-  if (status !== "confirmed") {
-    const button = iconButton("Confirm", "confirm");
+  if (status === "discovered" || status === "candidate") {
+    const button = iconButton("Identify", "confirm");
     button.addEventListener("click", () => openStepDialog(card));
     row.appendChild(button);
   }
@@ -348,20 +348,18 @@ function bindStepDialog() {
       })
       .then((data) => {
         if (card) {
-          card.dataset.status = "confirmed";
+          card.dataset.status = data.status || "processing";
           const pill = card.querySelector(".js-status");
           if (pill) {
-            pill.className = "pill js-status status-confirmed";
-            pill.textContent = "confirmed";
+            pill.className = "pill js-status status-" + card.dataset.status;
+            pill.textContent = card.dataset.status;
           }
-          paintActions(card, "confirmed");
+          paintActions(card, card.dataset.status);
           document.getElementById("step-title").textContent = "Add a step";
           if (data.counts) {
-            setCount("candidate", data.counts.candidate);
-            setCount("confirmed", data.counts.confirmed);
-            setCount("dismissed", data.counts.dismissed);
-            setCount("active", data.counts.active);
-            setCount("all", data.counts.all);
+            ["candidate", "confirmed", "dismissed", "active", "all", "discovered", "identified", "secured", "processing", "closed", "open", "in_process"].forEach((key) => {
+              if (data.counts[key] !== undefined) setCount(key, data.counts[key]);
+            });
           }
         }
         document.querySelectorAll("#step-options input").forEach((box) => {
@@ -401,11 +399,9 @@ function onFindingSubmit(event) {
         pill.textContent = status;
       }
       if (data.counts) {
-        setCount("candidate", data.counts.candidate);
-        setCount("confirmed", data.counts.confirmed);
-        setCount("dismissed", data.counts.dismissed);
-        setCount("active", data.counts.active);
-        setCount("all", data.counts.all);
+        ["candidate", "confirmed", "dismissed", "active", "all", "discovered", "identified", "secured", "processing", "closed", "open", "in_process"].forEach((key) => {
+          if (data.counts[key] !== undefined) setCount(key, data.counts[key]);
+        });
       }
       if (findingLeavesView(status)) {
         const section = card.closest("section.panel");
@@ -447,7 +443,7 @@ function bindAssetCards() {
   document.querySelectorAll(".asset").forEach((card) => {
     card.addEventListener("click", (event) => {
       if (event.target.closest("button, a, input, select, form")) return;
-      openStepDialog(card);
+      location.href = "/cases/" + card.dataset.finding;
     });
   });
 }
