@@ -147,8 +147,10 @@ html.dark .status-closed { color: #14241c; }
 .case-doc .pdf-pages { min-height: 0; }
 .case-doc img { width: 100%; height: auto; border-radius: 12px; background: #fff; }
 .case-empty { display: grid; place-items: center; min-height: 320px; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--muted); background: var(--surface); }
-.case-rail { display: grid; gap: 10px; align-content: start; padding: 12px; }
-.rail-next { display: grid; gap: 8px; }
+.case-rail { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.case-rail .panel { padding: 16px; }
+.case-rail .panel h2 { font-size: 1rem; }
+.case-rail .panel form.stack > .btn.icon { justify-self: end; }
 .rail-inline { display: flex; gap: 8px; align-items: center; }
 .rail-inline select, .rail-inline input { flex: 1; min-width: 0; }
 .rail-inline span { flex: 1; }

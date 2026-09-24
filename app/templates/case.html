@@ -17,13 +17,17 @@
     <div id="pdf-pages" class="pdf-pages" data-src="{{ preview_src }}"></div>
     {% else %}
     <div id="pdf-pages" class="pdf-pages case-empty" data-src="">
-      <p>No letter yet. Queue one from the rail.</p>
+      <p>No letter yet. Queue one under Next step.</p>
     </div>
     {% endif %}
   </section>
 
-  <aside class="case-rail panel">
-    <div class="rail-next">
+  <aside class="case-rail">
+    <section class="panel stack">
+      <h2>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7L8 5Z"/></svg>
+        Next step
+      </h2>
       {% if finding.stage == 'discovered' %}
       <form method="post" action="/cases/{{ finding.id }}/stage" class="rail-inline">
         <input type="hidden" name="target" value="identified">
@@ -39,6 +43,23 @@
         <button class="btn icon primary" type="submit" aria-label="Mark secured" title="Mark secured">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4 3 7 7 8 4-1 7-4 7-8V6l-7-3Z"/></svg>
         </button>
+      </form>
+      <form method="post" action="/cases/{{ finding.id }}/stage" class="stack">
+        <input type="hidden" name="target" value="processing">
+        <input type="hidden" name="override" value="1">
+        <label>Skip securing
+          <select name="disposition" aria-label="Disposition if securing is skipped">
+            {% for name in ['transfer','sell','split','payout','claim','cancel','close','keep'] %}
+            <option value="{{ name }}">{{ name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <div class="rail-inline">
+          <input name="note" required placeholder="Why securing is skipped" aria-label="Why securing is skipped">
+          <button class="btn icon" type="submit" aria-label="Skip securing" title="Skip securing">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
       </form>
       {% elif finding.stage == 'secured' %}
       <form method="post" action="/cases/{{ finding.id }}/stage" class="rail-inline">
@@ -68,31 +89,20 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5"/></svg>
         </button>
       </form>
-      {% endif %}
-      {% if finding.stage == 'identified' %}
-      <form method="post" action="/cases/{{ finding.id }}/stage" class="rail-inline">
-        <input type="hidden" name="target" value="processing">
-        <input type="hidden" name="override" value="1">
-        <select name="disposition" aria-label="Disposition if securing is skipped">
-          {% for name in ['transfer','sell','split','payout','claim','cancel','close','keep'] %}
-          <option value="{{ name }}">{{ name }}</option>
-          {% endfor %}
-        </select>
-        <input name="note" required placeholder="Why securing is skipped" aria-label="Why securing is skipped">
-        <button class="btn icon" type="submit" aria-label="Skip securing" title="Skip securing">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-        </button>
-      </form>
+      {% elif finding.stage == 'dismissed' %}
+      <p class="muted">This asset is out of the estate.</p>
       {% endif %}
       {% if finding.stage not in ['dismissed'] %}
-      <form method="post" action="/findings/{{ finding.id }}/queue" class="rail-inline">
+      <form method="post" action="/findings/{{ finding.id }}/queue" class="stack">
         <input type="hidden" name="redirect" value="1">
-        <select name="action" aria-label="Queue a letter">
-          {% for action in actions %}
-          <option value="{{ action }}">{{ action }}</option>
-          {% endfor %}
-        </select>
-        <button class="btn icon" type="submit" aria-label="Queue letter" title="Queue letter">
+        <label>Queue a letter
+          <select name="action" aria-label="Queue a letter">
+            {% for action in actions %}
+            <option value="{{ action }}">{{ action }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button class="btn icon primary" type="submit" aria-label="Queue letter" title="Queue letter">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4V6Z"/><path d="m4 7 8 6 8-6"/></svg>
         </button>
       </form>
@@ -101,80 +111,98 @@
       <form method="post" action="/cases/{{ finding.id }}/stage" class="rail-inline" data-confirm data-confirm-title="Dismiss this asset?" data-confirm-text="It leaves the estate. The reason stays on the timeline." data-confirm-ok="Dismiss">
         <input type="hidden" name="target" value="dismissed">
         <input type="hidden" name="note" value="Dismissed from the case file.">
-        <span class="muted">Dismiss</span>
+        <span class="muted">Not an estate asset</span>
         <button class="btn icon danger" type="submit" aria-label="Dismiss" title="Dismiss">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>
         </button>
       </form>
       {% endif %}
-    </div>
+    </section>
 
-    <ol class="rail-timeline">
-      {% for event in events %}
-      <li id="{% if event.job_id %}letter-{{ event.job_id }}{% endif %}">
-        <div class="rail-line">
-          <time>{{ event.created_at[5:10] }} {{ event.created_at[11:16] }}</time>
-          <strong>{{ event.summary }}</strong>
-          {% set ns = namespace(view='', job=none, doc=none) %}
-          {% for job in jobs if event.job_id and job.id == event.job_id %}
-            {% set ns.job = job %}
-          {% endfor %}
-          {% for doc in documents if doc.path and event.document_path and (doc.path == event.document_path or event.document_path.endswith(doc.path)) %}
-            {% set ns.doc = doc %}
-          {% endfor %}
-          {% if event.kind == 'reply' and ns.doc and ns.doc.path %}
-            {% set ns.view = '/cases/' ~ finding.id ~ '/files/' ~ ns.doc.id %}
-          {% elif ns.job and ns.job.packet_path %}
-            {% set ns.view = '/documents/' ~ ns.job.id ~ '/letter.pdf' %}
-          {% endif %}
-          {% if ns.view %}
-          <div class="rail-actions">
-            <button type="button" class="btn icon" data-view-src="{{ ns.view }}" aria-label="View" title="View">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-            {% if ns.job and ns.job.packet_path and event.kind != 'reply' %}
-            <a class="btn icon" href="/documents/{{ ns.job.id }}?print=1" aria-label="Print" title="Print">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
-            </a>
-            <a class="btn icon" href="/queue/{{ ns.job.id }}/packet" aria-label="Download" title="Download">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>
-            </a>
-            <form method="post" action="/cases/{{ finding.id }}/sent">
-              <input type="hidden" name="job_id" value="{{ ns.job.id }}">
-              <button class="btn icon" type="submit" aria-label="Mark sent" title="Mark sent">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-6 16-2-6-8-2Z"/></svg>
+    <section class="panel stack">
+      <h2>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Add response
+      </h2>
+      <form method="post" action="/cases/{{ finding.id }}/reply" enctype="multipart/form-data" class="stack">
+        <label>Answers this letter
+          <select name="job_id">
+            <option value="">Not tied to a letter</option>
+            {% for job in jobs %}
+            <option value="{{ job.id }}">{{ job.action }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>File
+          <input type="file" name="reply_file" accept="application/pdf,.pdf,image/png,image/jpeg">
+        </label>
+        <label>Note
+          <textarea name="reply_note" rows="2" placeholder="Paste the reply, or what was said"></textarea>
+        </label>
+        <button class="btn icon primary" type="submit" aria-label="Add response" title="Add response">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </form>
+      <form method="post" action="/cases/{{ finding.id }}/note" class="rail-inline">
+        <input name="note" required placeholder="Internal note only" aria-label="Add a note">
+        <button class="btn icon" type="submit" aria-label="Add note" title="Add note">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l3 3v13H6V4Z"/><path d="M15 4v4h4M8 12h8M8 16h5"/></svg>
+        </button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+        Timeline
+      </h2>
+      <ol class="rail-timeline">
+        {% for event in events %}
+        <li id="{% if event.job_id %}letter-{{ event.job_id }}{% endif %}">
+          <div class="rail-line">
+            <time>{{ event.created_at[5:10] }} {{ event.created_at[11:16] }}</time>
+            <strong>{{ event.summary }}</strong>
+            {% set ns = namespace(view='', job=none, doc=none) %}
+            {% for job in jobs if event.job_id and job.id == event.job_id %}
+              {% set ns.job = job %}
+            {% endfor %}
+            {% for doc in documents if doc.path and event.document_path and (doc.path == event.document_path or event.document_path.endswith(doc.path)) %}
+              {% set ns.doc = doc %}
+            {% endfor %}
+            {% if event.kind == 'reply' and ns.doc and ns.doc.path %}
+              {% set ns.view = '/cases/' ~ finding.id ~ '/files/' ~ ns.doc.id %}
+            {% elif ns.job and ns.job.packet_path %}
+              {% set ns.view = '/documents/' ~ ns.job.id ~ '/letter.pdf' %}
+            {% endif %}
+            {% if ns.view %}
+            <div class="rail-actions">
+              <button type="button" class="btn icon" data-view-src="{{ ns.view }}" aria-label="View" title="View">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
-            </form>
+              {% if ns.job and ns.job.packet_path and event.kind != 'reply' %}
+              <a class="btn icon" href="/documents/{{ ns.job.id }}?print=1" aria-label="Print" title="Print">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
+              </a>
+              <a class="btn icon" href="/queue/{{ ns.job.id }}/packet" aria-label="Download" title="Download">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>
+              </a>
+              <form method="post" action="/cases/{{ finding.id }}/sent">
+                <input type="hidden" name="job_id" value="{{ ns.job.id }}">
+                <button class="btn icon" type="submit" aria-label="Mark sent" title="Mark sent">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-6 16-2-6-8-2Z"/></svg>
+                </button>
+              </form>
+              {% endif %}
+            </div>
             {% endif %}
           </div>
-          {% endif %}
-        </div>
-        {% if event.detail %}<p class="muted">{{ event.detail }}</p>{% endif %}
-      </li>
-      {% else %}
-      <li class="muted">No events yet.</li>
-      {% endfor %}
-    </ol>
-
-    <form method="post" action="/cases/{{ finding.id }}/reply" enctype="multipart/form-data" class="rail-inline">
-      <select name="job_id" aria-label="Answers letter">
-        <option value="">Not tied to a letter</option>
-        {% for job in jobs %}
-        <option value="{{ job.id }}">{{ job.action }}</option>
+          {% if event.detail %}<p class="muted">{{ event.detail }}</p>{% endif %}
+        </li>
+        {% else %}
+        <li class="muted">No events yet.</li>
         {% endfor %}
-      </select>
-      <input type="file" name="reply_file" accept="application/pdf,.pdf,image/png,image/jpeg" aria-label="Response file">
-      <input name="reply_note" placeholder="Reply note" aria-label="Reply note">
-      <button class="btn icon primary" type="submit" aria-label="Add response" title="Add response">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-      </button>
-    </form>
-    <form method="post" action="/cases/{{ finding.id }}/note" class="rail-inline">
-      <input name="note" required placeholder="Add a note" aria-label="Add a note">
-      <button class="btn icon" type="submit" aria-label="Add note" title="Add note">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l3 3v13H6V4Z"/><path d="M15 4v4h4M8 12h8M8 16h5"/></svg>
-      </button>
-    </form>
+      </ol>
+    </section>
   </aside>
 </div>
 <script src="/static/pdf.min.js"></script>
