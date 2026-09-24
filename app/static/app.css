@@ -85,12 +85,18 @@ html.dark .icon-sun { display: inline; }
 .split, .stack, .cards, .findings, .runs, .evidence, .ids { display: grid; gap: 12px; }
 .stack label, .check { display: grid; gap: 6px; }
 .check { grid-template-columns: auto 1fr; align-items: center; }
-input, select {
+input, select, textarea {
   width: 100%;
   min-height: 44px;
   padding: 8px 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+input[type="file"] {
+  padding: 10px 12px;
+  color: var(--text);
   background: var(--bg);
 }
 .btn.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }

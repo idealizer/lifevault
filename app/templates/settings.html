@@ -56,11 +56,13 @@
         <input name="executor_address" value="{{ executor_address }}">
       </label>
     </div>
-    <label>Death certificate {% if has_death_certificate %}<span class="pill">On file</span>{% endif %}
-      <input type="file" name="death_certificate" accept=".pdf,.png,.jpg,.jpeg">
+    <label>Death certificate
+      {% if death_certificate_name %}<span class="pill">Saved: {{ death_certificate_name }}</span>{% endif %}
+      <input type="file" name="death_certificate" accept="application/pdf,.pdf,image/png,image/jpeg">
     </label>
-    <label>Executor authorisation {% if has_authorisation %}<span class="pill">On file</span>{% endif %}
-      <input type="file" name="executor_authorisation" accept=".pdf,.png,.jpg,.jpeg">
+    <label>Executor authorisation
+      {% if authorisation_name %}<span class="pill">Saved: {{ authorisation_name }}</span>{% endif %}
+      <input type="file" name="executor_authorisation" accept="application/pdf,.pdf,image/png,image/jpeg">
     </label>
     <button class="btn primary" type="submit">Save estate documents</button>
   </form>

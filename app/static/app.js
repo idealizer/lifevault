@@ -343,7 +343,25 @@ bindTheme();
 bindConfirm();
 bindFindingActions();
 bindSourceMessages();
+function bindFileNames() {
+  document.querySelectorAll("input[type='file']").forEach((input) => {
+    input.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      const label = input.closest("label");
+      if (!label) return;
+      let note = label.querySelector(".file-chosen");
+      if (!note) {
+        note = document.createElement("span");
+        note.className = "pill file-chosen";
+        label.insertBefore(note, input);
+      }
+      note.textContent = file ? "Selected: " + file.name : "";
+    });
+  });
+}
+
 bindStepDialog();
+bindFileNames();
 pollQueue();
 
 const params = new URLSearchParams(location.search);

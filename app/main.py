@@ -148,7 +148,7 @@ def queue_packet(job_id: int):
     path = Path(job["packet_path"])
     if not path.is_file():
         raise HTTPException(404, "That packet is not ready.")
-    return FileResponse(path, filename=f"lifevault-{job_id}.zip", media_type="application/zip")
+    return FileResponse(path, filename=path.name.split("-", 2)[-1], media_type="application/pdf")
 
 
 @app.post("/findings/{finding_id}/queue")
@@ -220,6 +220,8 @@ def settings_page(request: Request):
         executor_address=setting("executor_address"),
         has_death_certificate=estate_file("death_certificate") is not None,
         has_authorisation=estate_file("executor_authorisation") is not None,
+        death_certificate_name=(estate_file("death_certificate").name if estate_file("death_certificate") else ""),
+        authorisation_name=(estate_file("executor_authorisation").name if estate_file("executor_authorisation") else ""),
     )
 
 
