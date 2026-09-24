@@ -7,6 +7,9 @@
     <h1>{{ filename }}</h1>
     <p class="muted">{{ job.provider }} · {{ job.action }}</p>
   </div>
+  <a class="btn icon" href="?print=1" aria-label="Print" title="Print">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
+  </a>
   <a class="btn icon" href="/queue/{{ job.id }}/packet" aria-label="Download" title="Download">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>
   </a>

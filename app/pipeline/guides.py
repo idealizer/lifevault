@@ -4,18 +4,22 @@ from __future__ import annotations
 
 import json
 import re
+from urllib.parse import quote
 
 from openai import OpenAI
 
 from app.db import save_api_log, setting
 from app.llm.client import ModelError
 from app.pipeline.estate_actions import actions_for
-from app.pipeline.letters import needs_letter
+from app.pipeline.letter_copy import compose, detect_language
+from app.pipeline.letters import executor_contact, needs_letter
 
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _PROMPT = """You help an estate executor close, cancel, or transfer one asset of a deceased person.
 Use web search. Prefer the organisation's own help page.
 Return JSON only:
-{"summary":"one sentence","steps":[{"title":"short","detail":"one or two sentences","url":"https://... or empty","needs_letter":false,"letter_action":""}]}
+{"summary":"one sentence","steps":[{"title":"short","detail":"one or two sentences","url":"https://... or empty","email":"organisation@example.com or empty","needs_letter":false,"letter_action":""}]}
+Set email when the organisation accepts the request by email. Use an address published by that organisation.
 Set needs_letter true only when the organisation requires a posted letter, death certificate, or written authority.
 When needs_letter is true, letter_action must be copied exactly from the allowed list.
 Do not invent a login. Do not ask for passwords."""
@@ -60,7 +64,7 @@ def build_guide(finding: dict) -> dict:
         raise ModelError("The close guide could not be prepared.") from exc
     body = response.model_dump() if hasattr(response, "model_dump") else {"output_text": getattr(response, "output_text", "")}
     save_api_log("openai", model, "https://api.openai.com/v1/responses", "ok", _dump(payload), _dump(body))
-    guide = parse_guide(getattr(response, "output_text", "") or "", allowed)
+    guide = apply_mailto(parse_guide(getattr(response, "output_text", "") or "", allowed), finding)
     if not guide["steps"]:
         raise ModelError("The close guide did not include any steps.")
     return guide
@@ -92,16 +96,63 @@ def parse_guide(text: str, allowed: list[str]) -> dict:
             url = ""
         action = str(row.get("letter_action") or "").strip()
         letter = bool(row.get("needs_letter")) and action in allowed and needs_letter(action)
+        email = str(row.get("email") or "").strip()
+        if not _EMAIL.match(email):
+            email = ""
         steps.append(
             {
                 "title": title or "Next",
                 "detail": detail,
                 "url": url,
+                "email": email,
+                "mailto": "",
                 "needs_letter": letter,
                 "letter_action": action if letter else "",
             }
         )
     return {"summary": _clean(payload.get("summary"), 300), "steps": steps[:8]}
+
+
+def apply_mailto(guide: dict, finding: dict) -> dict:
+    source = []
+    for row in finding.get("evidence") or []:
+        source.append(str(row.get("subject") or ""))
+        source.append(str(row.get("body") or row.get("excerpt") or ""))
+    lang = detect_language("\n".join(source))
+    ctx = {
+        "deceased": setting("deceased_name"),
+        "died": setting("date_of_death"),
+        "provider": finding.get("provider") or "the organisation",
+        "asset": finding.get("label") or finding.get("provider") or "the relationship",
+        "identifiers": finding.get("identifiers") or [],
+        "estate_bank": setting("estate_bank"),
+        "estate_iban": setting("estate_iban"),
+        "estate_swift": setting("estate_swift"),
+    }
+    for step in guide.get("steps") or []:
+        email = step.get("email") or ""
+        action = step.get("letter_action") or ""
+        subject = ""
+        body = ""
+        if email and action:
+            letter = compose(action, lang, ctx)
+            contact = executor_contact()
+            subject = letter["subject"]
+            body = "\n\n".join(
+                [letter["salutation"], *letter["paragraphs"], letter["closing"], contact["signature"]]
+            )
+        step["mailto"] = _mailto(email, subject, body) if email else ""
+    return guide
+
+
+def _mailto(email: str, subject: str, body: str) -> str:
+    query = []
+    if subject:
+        query.append("subject=" + quote(subject))
+    if body:
+        query.append("body=" + quote(body))
+    suffix = ("?" + "&".join(query)) if query else ""
+    return "mailto:" + email + suffix
 
 
 def _clean(value, limit: int) -> str:

@@ -102,6 +102,7 @@ function iconLink(label, href, kind) {
   const paths = {
     view: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/>',
     download: '<path d="M12 4v10M8 10l4 4 4-4M5 19h14"/>',
+    print: '<path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/>',
   };
   link.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths[kind] + "</svg>";
   return link;
@@ -154,16 +155,22 @@ function estateActions() {
 }
 
 function stepChoice(value) {
+  const row = document.createElement("div");
+  row.className = "step-choice";
+  row.dataset.action = value;
   const label = document.createElement("label");
-  label.className = "step-choice";
   const box = document.createElement("input");
   box.type = "checkbox";
   box.name = "action";
   box.value = value;
   const text = document.createElement("span");
+  text.className = "step-text";
   text.textContent = value;
   label.append(box, text);
-  return label;
+  const status = document.createElement("span");
+  status.className = "step-status";
+  row.append(label, status);
+  return row;
 }
 
 function customStepRow() {
@@ -196,41 +203,71 @@ function openStepDialog(card) {
   document.getElementById("step-custom").replaceChildren();
   customStepRow();
   dialog.dataset.finding = card.dataset.finding;
-  paintStepHistory([]);
   dialog.showModal();
-  loadStepHistory(card.dataset.finding);
+  watchStepJobs(card.dataset.finding);
 }
 
-function paintStepHistory(jobs) {
-  const list = document.getElementById("step-history");
-  if (!list) return;
-  list.replaceChildren();
-  jobs.forEach((job) => {
-    const item = document.createElement("li");
-    const action = document.createElement("span");
-    action.textContent = job.action;
-    const pill = document.createElement("span");
-    pill.className = "pill status-" + job.status;
-    pill.textContent = job.status;
-    item.append(action, pill);
-    if (job.ready) {
-      const link = document.createElement("a");
-      link.href = "/queue/" + job.id + "/packet";
-      link.textContent = "Download";
-      item.appendChild(link);
-    }
-    list.appendChild(item);
+let stepPoll = 0;
+
+function paintChoiceStatus(row, jobs) {
+  const slot = row.querySelector(".step-status");
+  if (!slot) return;
+  slot.replaceChildren();
+  if (!jobs.length) return;
+  const job = jobs[jobs.length - 1];
+  const pill = document.createElement("span");
+  pill.className = "pill status-" + job.status;
+  pill.textContent = job.status;
+  slot.appendChild(pill);
+  if (job.ready) {
+    slot.appendChild(iconLink("View", "/documents/" + job.id, "view"));
+    slot.appendChild(iconLink("Print", "/documents/" + job.id + "?print=1", "print"));
+  }
+}
+
+function paintStepStatuses(jobs) {
+  const options = document.getElementById("step-options");
+  const custom = document.getElementById("step-custom");
+  if (!options || !custom) return;
+  const known = new Set();
+  options.querySelectorAll(".step-choice").forEach((row) => {
+    if (!row.dataset.action) return;
+    known.add(row.dataset.action);
+    paintChoiceStatus(row, jobs.filter((job) => job.action === row.dataset.action));
+  });
+  custom.querySelectorAll(".js-queued-custom").forEach((row) => row.remove());
+  jobs.filter((job) => job.action && !known.has(job.action)).forEach((job) => {
+    const row = document.createElement("div");
+    row.className = "step-choice js-queued-custom";
+    row.dataset.action = job.action;
+    const text = document.createElement("span");
+    text.className = "step-text";
+    text.textContent = job.action;
+    const status = document.createElement("span");
+    status.className = "step-status";
+    row.append(text, status);
+    paintChoiceStatus(row, [job]);
+    custom.prepend(row);
   });
 }
 
-function loadStepHistory(findingId) {
-  fetch("/queue.json")
-    .then((response) => response.json())
-    .then((data) => {
-      const jobs = (data.jobs || []).filter((job) => String(job.finding_id) === String(findingId));
-      paintStepHistory(jobs);
-    })
-    .catch(() => {});
+function watchStepJobs(findingId) {
+  clearTimeout(stepPoll);
+  const tick = () => {
+    const dialog = document.getElementById("step-dialog");
+    if (!dialog || !dialog.open) return;
+    fetch("/queue.json")
+      .then((response) => response.json())
+      .then((data) => {
+        if (!dialog.open || dialog.dataset.finding !== String(findingId)) return;
+        const jobs = (data.jobs || []).filter((job) => String(job.finding_id) === String(findingId));
+        paintStepStatuses(jobs);
+        const active = jobs.some((job) => job.status === "queued" || job.status === "running");
+        if (active) stepPoll = setTimeout(tick, 1500);
+      })
+      .catch(() => {});
+  };
+  tick();
 }
 
 function paintQueue(jobs) {
@@ -266,6 +303,7 @@ function paintQueue(jobs) {
     item.append(text, pill);
     if (job.ready) {
       item.appendChild(iconLink("View", "/documents/" + job.id, "view"));
+      item.appendChild(iconLink("Print", "/documents/" + job.id + "?print=1", "print"));
       item.appendChild(iconLink("Download", "/queue/" + job.id + "/packet", "download"));
     }
     list.appendChild(item);
@@ -296,6 +334,7 @@ function bindStepDialog() {
     document.querySelectorAll("#step-custom .step-choice").forEach((row) => {
       const input = row.querySelector("input[type='text']");
       const box = row.querySelector(".js-custom-check");
+      if (!input || !box) return;
       input.removeAttribute("name");
       if (box.checked && input.value.trim()) {
         input.name = "note";
@@ -330,7 +369,7 @@ function bindStepDialog() {
         });
         document.getElementById("step-custom").replaceChildren();
         customStepRow();
-        loadStepHistory(dialog.dataset.finding);
+        watchStepJobs(dialog.dataset.finding);
         showToast("Queued", "success");
         pollQueue();
       })
@@ -507,6 +546,13 @@ function paintGuide(payload, findingId) {
       link.textContent = "Open link";
       actions.appendChild(link);
     }
+    if (step.mailto) {
+      const mail = document.createElement("a");
+      mail.className = "btn";
+      mail.href = step.mailto;
+      mail.textContent = "Send email";
+      actions.appendChild(mail);
+    }
     if (step.needs_letter && step.letter_action) {
       const button = document.createElement("button");
       button.type = "button";
@@ -652,6 +698,7 @@ function renderPdf() {
       host.appendChild(canvas);
       await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
     }
+    if (new URLSearchParams(location.search).get("print") === "1") window.print();
   }).catch(() => showToast("Could not open that document", "error"));
 }
 

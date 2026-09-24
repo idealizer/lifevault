@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.db import connect, init_db, list_api_logs, save_finding, set_setting
 from app.main import app
 from app.pipeline import guides
-from app.pipeline.guides import parse_guide
+from app.pipeline.guides import apply_mailto, parse_guide
 
 
 def _finding() -> int:
@@ -23,6 +23,7 @@ def _finding() -> int:
 
 
 def test_parse_keeps_official_links_and_catalogue_letters():
+    init_db()
     allowed = [
         "Close the account after distribution",
         "Record the exchange or wallet in the estate inventory",
@@ -31,7 +32,8 @@ def test_parse_keeps_official_links_and_catalogue_letters():
         """```json
         {"summary":"Close online, then post if asked.",
          "steps":[
-           {"title":"Form","detail":"Use the bank page.","url":"https://bank.example/close","needs_letter":false,"letter_action":""},
+           {"title":"Form","detail":"Use the bank page.","url":"https://bank.example/close","email":"not-an-email","needs_letter":false,"letter_action":""},
+           {"title":"Email","detail":"Write to the estate desk.","url":"","email":"estate@bank.example","needs_letter":true,"letter_action":"Close the account after distribution"},
            {"title":"Post","detail":"Send the letter.","url":"javascript:alert(1)","needs_letter":true,"letter_action":"Close the account after distribution"},
            {"title":"Skip","detail":"Not a letter.","url":"","needs_letter":true,"letter_action":"Invent a call"}
          ]}
@@ -39,10 +41,15 @@ def test_parse_keeps_official_links_and_catalogue_letters():
         allowed,
     )
     assert guide["steps"][0]["url"] == "https://bank.example/close"
-    assert guide["steps"][1]["needs_letter"] is True
-    assert guide["steps"][1]["url"] == ""
-    assert guide["steps"][1]["letter_action"] == "Close the account after distribution"
-    assert guide["steps"][2]["needs_letter"] is False
+    assert guide["steps"][0]["email"] == ""
+    assert guide["steps"][1]["email"] == "estate@bank.example"
+    filled = apply_mailto(guide, {"provider": "Example Bank", "label": "Account", "identifiers": [], "evidence": []})
+    assert filled["steps"][1]["mailto"].startswith("mailto:estate@bank.example?subject=")
+    assert "body=" in filled["steps"][1]["mailto"]
+    assert guide["steps"][2]["needs_letter"] is True
+    assert guide["steps"][2]["url"] == ""
+    assert guide["steps"][2]["letter_action"] == "Close the account after distribution"
+    assert guide["steps"][3]["needs_letter"] is False
 
 
 def test_missing_key_is_explained_and_stored_guide_is_reused(monkeypatch):
