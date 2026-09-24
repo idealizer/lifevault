@@ -12,7 +12,6 @@ services:
       - "8765"
     labels:
       - traefik.enable=true
-      - traefik.docker.network=idealizer-internal
       - traefik.http.routers.lifevault-ch.rule=Host(`lifevault.ch`) || Host(`www.lifevault.ch`)
       - traefik.http.routers.lifevault-ch.entrypoints=websecure
       - traefik.http.routers.lifevault-ch.tls.certresolver=letsencrypt
