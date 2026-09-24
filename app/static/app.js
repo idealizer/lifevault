@@ -135,7 +135,7 @@ function openStepDialog(card) {
   const dialog = document.getElementById("step-dialog");
   const select = document.getElementById("step-action");
   const options = estateActions()[card.dataset.category] || estateActions().other || [];
-  document.getElementById("step-title").textContent = "Next step";
+  document.getElementById("step-title").textContent = card.dataset.status === "confirmed" ? "Add a step" : "Next step";
   document.getElementById("step-asset").textContent = card.querySelector("strong").textContent;
   document.getElementById("step-note").value = "";
   select.replaceChildren();
@@ -146,7 +146,41 @@ function openStepDialog(card) {
     select.appendChild(option);
   });
   dialog.dataset.finding = card.dataset.finding;
+  paintStepHistory([]);
   dialog.showModal();
+  loadStepHistory(card.dataset.finding);
+}
+
+function paintStepHistory(jobs) {
+  const list = document.getElementById("step-history");
+  if (!list) return;
+  list.replaceChildren();
+  jobs.forEach((job) => {
+    const item = document.createElement("li");
+    const action = document.createElement("span");
+    action.textContent = job.action;
+    const pill = document.createElement("span");
+    pill.className = "pill status-" + job.status;
+    pill.textContent = job.status;
+    item.append(action, pill);
+    if (job.ready) {
+      const link = document.createElement("a");
+      link.href = "/queue/" + job.id + "/packet";
+      link.textContent = "Download";
+      item.appendChild(link);
+    }
+    list.appendChild(item);
+  });
+}
+
+function loadStepHistory(findingId) {
+  fetch("/queue.json")
+    .then((response) => response.json())
+    .then((data) => {
+      const jobs = (data.jobs || []).filter((job) => String(job.finding_id) === String(findingId));
+      paintStepHistory(jobs);
+    })
+    .catch(() => {});
 }
 
 function paintQueue(jobs) {
@@ -212,7 +246,6 @@ function bindStepDialog() {
         return response.json();
       })
       .then((data) => {
-        dialog.close();
         if (card) {
           card.dataset.status = "confirmed";
           const pill = card.querySelector(".js-status");
@@ -221,6 +254,7 @@ function bindStepDialog() {
             pill.textContent = "confirmed";
           }
           paintActions(card, "confirmed");
+          document.getElementById("step-title").textContent = "Add a step";
           if (data.counts) {
             setCount("candidate", data.counts.candidate);
             setCount("confirmed", data.counts.confirmed);
@@ -229,6 +263,8 @@ function bindStepDialog() {
             setCount("all", data.counts.all);
           }
         }
+        document.getElementById("step-note").value = "";
+        loadStepHistory(dialog.dataset.finding);
         showToast("Queued", "success");
         pollQueue();
       })
@@ -302,6 +338,15 @@ function bindFindingActions() {
   document.querySelectorAll(".asset").forEach((card) => paintActions(card, card.dataset.status));
 }
 
+function bindAssetCards() {
+  document.querySelectorAll(".asset").forEach((card) => {
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button, a, input, select, form")) return;
+      openStepDialog(card);
+    });
+  });
+}
+
 function fillMessageDialog(messages) {
   const box = document.getElementById("message-body");
   box.replaceChildren();
@@ -346,6 +391,7 @@ readNotice();
 bindTheme();
 bindConfirm();
 bindFindingActions();
+bindAssetCards();
 bindSourceMessages();
 function bindFileNames() {
   document.querySelectorAll("input[type='file']").forEach((input) => {

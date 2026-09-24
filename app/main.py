@@ -135,6 +135,7 @@ def queue_json():
         rows.append(
             {
                 "id": job["id"],
+                "finding_id": job["finding_id"],
                 "label": job.get("label") or "Asset",
                 "provider": job.get("provider") or "",
                 "action": job["action"],
