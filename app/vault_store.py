@@ -164,7 +164,40 @@ def counts() -> dict[str, int]:
     return {kind: int(found.get(kind, 0)) for kind in KIND_KEYS}
 
 
-def save_entry(kind: str, fields: dict[str, str], entry_id: int | None = None) -> int:
+def login_for_finding(finding_id: int) -> int | None:
+    _require()
+    with _lock:
+        conn = connect()
+        try:
+            row = conn.execute(
+                "SELECT id FROM credentials WHERE finding_id = ?",
+                (finding_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+    return int(row["id"]) if row else None
+
+
+def login_fields(finding: dict) -> dict[str, str]:
+    title = (finding.get("provider") or finding.get("label") or "Online account").strip()
+    return {
+        "title": title[:200],
+        "url": _website(finding),
+        "username": _identifier(finding, {"email", "username", "login"}),
+        "password": "",
+        "notes": (finding.get("label") or "").strip()[:4000],
+    }
+
+
+def save_login_for_finding(finding: dict) -> bool:
+    finding_id = int(finding["id"])
+    if login_for_finding(finding_id):
+        return False
+    save_entry("logins", login_fields(finding), finding_id=finding_id)
+    return True
+
+
+def save_entry(kind: str, fields: dict[str, str], entry_id: int | None = None, finding_id: int | None = None) -> int:
     if kind not in KIND_KEYS:
         raise VaultError("Choose a kind.")
     title = (fields.get("title") or "").strip()
@@ -194,10 +227,10 @@ def save_entry(kind: str, fields: dict[str, str], entry_id: int | None = None) -
                 return entry_id
             cur = conn.execute(
                 """
-                INSERT INTO credentials(kind, nonce, ciphertext, created_at, updated_at)
-                VALUES(?, ?, ?, ?, ?)
+                INSERT INTO credentials(kind, nonce, ciphertext, created_at, updated_at, finding_id)
+                VALUES(?, ?, ?, ?, ?, ?)
                 """,
-                (kind, nonce, ciphertext, now, now),
+                (kind, nonce, ciphertext, now, now, finding_id),
             )
             conn.commit()
             return int(cur.lastrowid)
@@ -214,6 +247,28 @@ def delete_entry(entry_id: int) -> None:
             conn.commit()
         finally:
             conn.close()
+
+
+def _identifier(finding: dict, types: set[str]) -> str:
+    for item in finding.get("identifiers") or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("type") or "").lower() not in types:
+            continue
+        value = str(item.get("value") or "").strip()
+        if value:
+            return value[:4000]
+    return ""
+
+
+def _website(finding: dict) -> str:
+    direct = _identifier(finding, {"url", "website"})
+    if direct:
+        return direct if direct.startswith(("http://", "https://")) else "https://" + direct
+    domain = _identifier(finding, {"domain"})
+    if not domain:
+        return ""
+    return domain if domain.startswith(("http://", "https://")) else "https://" + domain.lstrip("/")
 
 
 def _field_names(kind: str) -> list[str]:

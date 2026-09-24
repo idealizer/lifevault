@@ -162,6 +162,9 @@ def _ensure_message_columns(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    credential_columns = {row[1] for row in conn.execute("PRAGMA table_info(credentials)").fetchall()}
+    if "finding_id" not in credential_columns:
+        conn.execute("ALTER TABLE credentials ADD COLUMN finding_id INTEGER")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS api_logs (

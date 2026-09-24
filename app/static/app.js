@@ -661,7 +661,30 @@ bindConfirm();
 bindFindingActions();
 bindAssetCards();
 bindSourceMessages();
+function bindVaultLogin() {
+  document.querySelectorAll("[data-vault-login]").forEach((button) => {
+    button.addEventListener("click", () => {
+      button.disabled = true;
+      fetch("/findings/" + button.dataset.vaultLogin + "/vault-login", { method: "POST" })
+        .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+        .then((result) => {
+          button.disabled = false;
+          if (!result.ok) {
+            showToast((result.data && result.data.detail) || "Could not save that login", "error");
+            return;
+          }
+          showToast(result.data.message || "Saved to the vault.", result.data.already ? "info" : "success");
+        })
+        .catch(() => {
+          button.disabled = false;
+          showToast("Could not save that login", "error");
+        });
+    });
+  });
+}
+
 bindGuides();
+bindVaultLogin();
 function bindFileNames() {
   document.querySelectorAll("input[type='file']").forEach((input) => {
     input.addEventListener("change", () => {

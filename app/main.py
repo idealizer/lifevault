@@ -57,7 +57,7 @@ from app.pipeline.queue import start_queue
 from app.pipeline.scan import backfill_signals, execute_scan, message_body, window_start
 from app.vault_store import KINDS, VaultError, counts as vault_counts
 from app.vault_store import delete_entry, list_entries, lock as vault_lock
-from app.vault_store import save_entry, setup as vault_setup, unlock as vault_unlock
+from app.vault_store import save_entry, save_login_for_finding, setup as vault_setup, unlock as vault_unlock
 from app.vault_store import unlocked as vault_unlocked, vault_ready
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -157,6 +157,24 @@ def credentials_unlock(password: str = Form("")):
     if not vault_unlock(password):
         return _redirect("/vault", "That password did not open the vault.", "error")
     return _redirect("/vault", "Vault unlocked.")
+
+
+@app.post("/findings/{finding_id}/vault-login")
+def finding_vault_login(finding_id: int):
+    row = _finding_row(finding_id)
+    if row.get("category") != "online_accounts":
+        raise HTTPException(400, "Only an online account can be saved as a login.")
+    if not vault_unlocked():
+        raise HTTPException(400, "Unlock the vault first.")
+    try:
+        created = save_login_for_finding(row)
+    except VaultError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {
+        "ok": True,
+        "already": not created,
+        "message": "Already in the vault." if not created else "Saved to the vault.",
+    }
 
 
 @app.post("/vault/lock")

@@ -51,6 +51,11 @@
           <p class="muted">{{ item.provider }}{% if item.asset_kind %} · {{ item.asset_kind }}{% endif %}{% if item.identifiers %} · {{ item.identifiers[0].type }} {{ item.identifiers[0].value }}{% endif %}</p>
         </div>
         <div class="asset-side">
+          {% if section.key == 'online_accounts' %}
+          <button type="button" class="btn icon" data-vault-login="{{ item.id }}" aria-label="Save to vault" title="Save to vault">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 13.5 20 5l-2 5 2 1-3 3"/></svg>
+          </button>
+          {% endif %}
           <button type="button" class="btn icon" data-guide="{{ item.id }}" aria-label="Close instructions" title="Close instructions">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg>
           </button>
