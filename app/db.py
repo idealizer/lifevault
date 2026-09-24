@@ -127,6 +127,8 @@ def _ensure_message_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE findings ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
     if "action_status" not in finding_columns:
         conn.execute("ALTER TABLE findings ADD COLUMN action_status TEXT NOT NULL DEFAULT ''")
+    if "guide_json" not in finding_columns:
+        conn.execute("ALTER TABLE findings ADD COLUMN guide_json TEXT NOT NULL DEFAULT ''")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS jobs (
@@ -891,6 +893,19 @@ def get_job(job_id: int) -> dict[str, Any] | None:
             """,
             (job_id,),
         )
+
+
+def save_finding_guide(finding_id: int, guide: dict) -> None:
+    with _lock:
+        conn = connect()
+        try:
+            conn.execute(
+                "UPDATE findings SET guide_json = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(guide, ensure_ascii=False)[:200000], utc_now(), finding_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def set_finding_status(finding_id: int, status: str) -> None:

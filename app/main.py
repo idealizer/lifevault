@@ -40,6 +40,7 @@ from app.db import (
     list_sources,
     mask_secret,
     save_action_choice,
+    save_finding_guide,
     set_finding_status,
     set_job_reply,
     set_setting,
@@ -47,7 +48,8 @@ from app.db import (
     update_run,
     upsert_message,
 )
-from app.llm.client import resolve_llm
+from app.llm.client import ModelError, resolve_llm
+from app.pipeline.guides import build_guide, openai_ready
 from app.pipeline.estate_actions import ESTATE_ACTIONS, actions_for
 from app.pipeline.import_mail import ImportError, parse_mail_file
 from app.pipeline.letters import estate_file, reply_path, save_estate_file, save_reply_file
@@ -351,6 +353,41 @@ def queue_finding(
     return {"ok": True, "status": "confirmed", "job_id": job_ids[0], "job_ids": job_ids, "counts": finding_counts()}
 
 
+def _finding_row(finding_id: int) -> dict:
+    rows = [row for row in list_findings("all") if row["id"] == finding_id]
+    if not rows:
+        raise HTTPException(404, "That asset is not in the vault.")
+    return rows[0]
+
+
+def _stored_guide(row: dict) -> dict | None:
+    raw = row.get("guide_json") or ""
+    if not raw:
+        return None
+    try:
+        guide = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return guide if isinstance(guide, dict) and guide.get("steps") else None
+
+
+@app.get("/findings/{finding_id}/guide")
+def finding_guide(finding_id: int):
+    row = _finding_row(finding_id)
+    return {"ok": True, "has_key": openai_ready(), "guide": _stored_guide(row)}
+
+
+@app.post("/findings/{finding_id}/guide")
+def finding_guide_search(finding_id: int):
+    row = _finding_row(finding_id)
+    try:
+        guide = build_guide(row)
+    except ModelError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    save_finding_guide(finding_id, guide)
+    return {"ok": True, "has_key": True, "guide": guide}
+
+
 @app.get("/inventory")
 def inventory_redirect(status: str = "active", category: str = ""):
     query = f"status={status}"
@@ -396,6 +433,8 @@ def settings_page(request: Request):
         key_hint=mask_secret(llm["api_key"]),
         apertus_model=setting("apertus_model") or "swiss-ai/Apertus-v1.5-70B",
         grok_model=setting("xai_model") or "grok-4",
+        openai_hint=mask_secret(setting("openai_api_key")),
+        openai_model=setting("openai_model") or "gpt-4.1",
         token_budget=setting("token_budget") or str(default_token_budget()),
         analysed=analysed_counts(),
         scanning=has_active_run(),
@@ -438,6 +477,8 @@ def save_settings(
     xai_api_key: str = Form(""),
     apertus_model: str = Form(""),
     xai_model: str = Form(""),
+    openai_api_key: str = Form(""),
+    openai_model: str = Form(""),
     token_budget: str = Form(""),
 ):
     provider = "grok" if llm_provider == "grok" else "apertus"
@@ -450,6 +491,10 @@ def save_settings(
         set_setting("apertus_model", apertus_model.strip())
     if xai_model.strip():
         set_setting("xai_model", xai_model.strip())
+    if openai_api_key.strip():
+        set_setting("openai_api_key", openai_api_key.strip())
+    if openai_model.strip():
+        set_setting("openai_model", openai_model.strip())
     if token_budget.strip().isdigit():
         set_setting("token_budget", str(min(10_000_000, max(10_000, int(token_budget)))))
     return _redirect("/settings", "Settings saved")

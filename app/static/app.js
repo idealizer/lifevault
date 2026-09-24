@@ -453,12 +453,169 @@ function bindSourceMessages() {
   });
 }
 
+function paintGuide(payload, findingId) {
+  const body = document.getElementById("guide-body");
+  const refresh = document.getElementById("guide-refresh");
+  body.replaceChildren();
+  refresh.hidden = !payload.has_key;
+  if (!payload.has_key) {
+    const note = document.createElement("p");
+    note.textContent = "Add an OpenAI API key in Settings to prepare close instructions.";
+    const link = document.createElement("a");
+    link.className = "btn";
+    link.href = "/settings";
+    link.textContent = "Open Settings";
+    body.append(note, link);
+    return;
+  }
+  const guide = payload.guide;
+  if (!guide || !guide.steps || !guide.steps.length) {
+    const note = document.createElement("p");
+    note.textContent = "No close instructions yet. Search again to look up the current path.";
+    body.appendChild(note);
+    return;
+  }
+  if (guide.summary) {
+    const summary = document.createElement("p");
+    summary.textContent = guide.summary;
+    body.appendChild(summary);
+  }
+  const list = document.createElement("ol");
+  list.className = "guide-steps";
+  guide.steps.forEach((step, index) => {
+    const item = document.createElement("li");
+    const number = document.createElement("span");
+    number.className = "step-no";
+    number.textContent = String(index + 1);
+    const copy = document.createElement("div");
+    const title = document.createElement("h3");
+    title.textContent = step.title || "Next";
+    copy.appendChild(title);
+    if (step.detail) {
+      const detail = document.createElement("p");
+      detail.textContent = step.detail;
+      copy.appendChild(detail);
+    }
+    const actions = document.createElement("div");
+    actions.className = "row";
+    if (step.url) {
+      const link = document.createElement("a");
+      link.className = "btn";
+      link.href = step.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Open link";
+      actions.appendChild(link);
+    }
+    if (step.needs_letter && step.letter_action) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn primary";
+      button.textContent = "Queue letter";
+      button.addEventListener("click", () => queueGuideLetter(findingId, step.letter_action, button));
+      actions.appendChild(button);
+    }
+    if (actions.childElementCount) copy.appendChild(actions);
+    item.append(number, copy);
+    list.appendChild(item);
+  });
+  body.appendChild(list);
+}
+
+function queueGuideLetter(findingId, action, button) {
+  button.disabled = true;
+  const body = new FormData();
+  body.append("action", action);
+  fetch("/findings/" + findingId + "/queue", { method: "POST", body })
+    .then((response) => {
+      if (!response.ok) throw new Error("queue");
+      return response.json();
+    })
+    .then((data) => {
+      const card = document.querySelector(".asset[data-finding='" + findingId + "']");
+      if (card) {
+        card.dataset.status = data.status || "confirmed";
+        const pill = card.querySelector(".js-status");
+        if (pill) {
+          pill.className = "pill js-status status-" + card.dataset.status;
+          pill.textContent = card.dataset.status;
+        }
+        paintActions(card, card.dataset.status);
+      }
+      showToast("Letter queued", "success");
+      pollQueue();
+    })
+    .catch(() => {
+      button.disabled = false;
+      showToast("Could not queue that letter", "error");
+    });
+}
+
+function bindGuides() {
+  const dialog = document.getElementById("guide-dialog");
+  if (!dialog) return;
+  const title = document.getElementById("guide-title");
+  const body = document.getElementById("guide-body");
+  let currentId = "";
+
+  function request(refresh) {
+    body.replaceChildren();
+    const note = document.createElement("p");
+    note.textContent = "Looking up the current close path…";
+    body.appendChild(note);
+    document.getElementById("guide-refresh").disabled = true;
+    const path = "/findings/" + currentId + "/guide";
+    return fetch(path, { method: refresh ? "POST" : "GET" })
+      .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+      .then((result) => {
+        document.getElementById("guide-refresh").disabled = false;
+        if (!result.ok) {
+          body.replaceChildren();
+          const fail = document.createElement("p");
+          fail.textContent = (result.data && result.data.detail) || "The close guide could not be prepared.";
+          body.appendChild(fail);
+          showToast(fail.textContent, "error");
+          return;
+        }
+        paintGuide(result.data, currentId);
+      })
+      .catch(() => {
+        document.getElementById("guide-refresh").disabled = false;
+        body.replaceChildren();
+        const fail = document.createElement("p");
+        fail.textContent = "The close guide could not be prepared.";
+        body.appendChild(fail);
+        showToast(fail.textContent, "error");
+      });
+  }
+
+  document.querySelectorAll("[data-guide]").forEach((button) => {
+    button.addEventListener("click", () => {
+      currentId = button.dataset.guide;
+      const card = button.closest(".asset");
+      const label = card ? card.querySelector("strong") : null;
+      title.textContent = label ? label.textContent : "Close this asset";
+      dialog.showModal();
+      fetch("/findings/" + currentId + "/guide")
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.has_key && !data.guide) return request(true);
+          paintGuide(data, currentId);
+        })
+        .catch(() => showToast("The close guide could not be prepared.", "error"));
+    });
+  });
+  document.getElementById("guide-close").addEventListener("click", () => dialog.close());
+  document.getElementById("guide-refresh").addEventListener("click", () => request(true));
+}
+
 readNotice();
 bindTheme();
 bindConfirm();
 bindFindingActions();
 bindAssetCards();
 bindSourceMessages();
+bindGuides();
 function bindFileNames() {
   document.querySelectorAll("input[type='file']").forEach((input) => {
     input.addEventListener("change", () => {
@@ -481,12 +638,17 @@ function renderPdf() {
   if (!host || !window.pdfjsLib) return;
   pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/pdf.worker.min.js";
   pdfjsLib.getDocument(host.dataset.src).promise.then(async (pdf) => {
+    const cssWidth = Math.max(host.clientWidth || 720, 320);
+    const pixelRatio = window.devicePixelRatio || 1;
     for (let number = 1; number <= pdf.numPages; number += 1) {
       const page = await pdf.getPage(number);
-      const viewport = page.getViewport({ scale: 1.5 });
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: (cssWidth / base.width) * pixelRatio });
       const canvas = document.createElement("canvas");
       canvas.width = viewport.width;
       canvas.height = viewport.height;
+      canvas.style.width = cssWidth + "px";
+      canvas.style.height = (viewport.height / pixelRatio) + "px";
       host.appendChild(canvas);
       await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
     }
@@ -542,8 +704,14 @@ function bindCredentials() {
   });
   document.querySelectorAll(".js-edit").forEach((button) => {
     button.addEventListener("click", () => {
+      let fields = {};
+      try {
+        fields = JSON.parse(button.getAttribute("data-fields") || "{}");
+      } catch (error) {
+        showToast("Could not open that entry", "error");
+        return;
+      }
       form.reset();
-      const fields = JSON.parse(button.dataset.fields || "{}");
       document.getElementById("credential-id").value = button.dataset.id;
       kindSelect.value = button.dataset.kind;
       document.getElementById("credential-title").textContent = "Edit secret";

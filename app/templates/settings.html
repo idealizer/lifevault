@@ -27,6 +27,14 @@
       </label>
     </div>
     <div class="split">
+      <label>OpenAI API key
+        <input type="password" name="openai_api_key" autocomplete="off" placeholder="{{ openai_hint or 'For close instructions' }}">
+      </label>
+      <label>OpenAI model
+        <input name="openai_model" value="{{ openai_model }}">
+      </label>
+    </div>
+    <div class="split">
       <label>Apertus model
         <input name="apertus_model" value="{{ apertus_model }}">
       </label>

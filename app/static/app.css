@@ -239,6 +239,12 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .btn.icon { width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 .btn.icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .message-dialog { width: min(720px, calc(100% - 32px)); }
+.guide-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+.guide-steps li { display: grid; grid-template-columns: 32px 1fr; gap: 10px; align-items: start; }
+.guide-steps .step-no { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; background: var(--pill); color: var(--pill-text); font-weight: 650; }
+.guide-steps h3 { margin: 0 0 4px; font-size: 1rem; }
+.guide-steps p { margin: 0 0 8px; }
+.guide-steps .row { margin-top: 4px; }
 .message-dialog .row { justify-content: space-between; align-items: center; flex-wrap: nowrap; }
 .message-dialog h2 { margin: 0; }
 .message-body { display: grid; gap: 16px; max-height: min(70vh, 640px); overflow: auto; }

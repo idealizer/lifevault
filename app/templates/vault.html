@@ -51,6 +51,9 @@
           <p class="muted">{{ item.provider }}{% if item.asset_kind %} · {{ item.asset_kind }}{% endif %}{% if item.identifiers %} · {{ item.identifiers[0].type }} {{ item.identifiers[0].value }}{% endif %}</p>
         </div>
         <div class="asset-side">
+          <button type="button" class="btn icon" data-guide="{{ item.id }}" aria-label="Close instructions" title="Close instructions">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg>
+          </button>
           {% if item.evidence %}
           <button type="button" class="btn icon" data-source="{{ item.id }}" aria-label="View source message">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4V6Z"/><path d="m4 7 8 6 8-6"/></svg>
