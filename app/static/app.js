@@ -466,6 +466,15 @@ function fillMessageDialog(messages) {
   });
 }
 
+function bindKickerBack() {
+  document.querySelectorAll("[data-back]").forEach((link) => {
+    const ref = document.referrer || "";
+    if (!ref.startsWith(location.origin) || ref === location.href) return;
+    link.textContent = "Back";
+    link.href = ref;
+  });
+}
+
 function bindSourceMessages() {
   const dialog = document.getElementById("message-dialog");
   if (!dialog) return;
@@ -656,6 +665,7 @@ bindTheme();
 bindConfirm();
 bindFindingActions();
 bindAssetCards();
+bindKickerBack();
 bindSourceMessages();
 function bindVaultLogin() {
   document.querySelectorAll("[data-vault-login]").forEach((button) => {

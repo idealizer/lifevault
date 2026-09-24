@@ -77,6 +77,8 @@ html.dark .icon-sun { display: inline; }
 .wrap { display: grid; gap: 16px; padding-bottom: 48px; }
 .hero h1 { font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.05; margin: 0 0 8px; }
 .kicker { text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.75rem; color: var(--muted); margin: 0; }
+.kicker a { color: inherit; text-decoration: none; }
+.kicker a:hover { color: var(--text); }
 .panel, .cards li, .findings li {
   background: var(--surface);
   border: 1px solid var(--border);

@@ -3,7 +3,7 @@
 {% block content %}
 <section class="vault-head">
   <div>
-    <p class="kicker"><a href="/documents">Documents</a></p>
+    <p class="kicker"><a href="/" data-back>Home</a> · <a href="/documents">Documents</a></p>
     <h1>{{ finding.label or finding.provider }}</h1>
     <p class="muted">{{ finding.provider }}{% if finding.asset_kind %} · {{ finding.asset_kind }}{% endif %}{% if finding.disposition %} · {{ finding.disposition }}{% endif %}</p>
   </div>
@@ -137,13 +137,16 @@
       <ol class="rail-timeline">
         {% for event in events %}
         <li id="{% if event.job_id %}letter-{{ event.job_id }}{% endif %}">
-          {% set ns = namespace(view='', job=none, doc=none) %}
+          {% set ns = namespace(view='', job=none, doc=none, source=false) %}
           {% for job in jobs if event.job_id and job.id == event.job_id %}
             {% set ns.job = job %}
           {% endfor %}
           {% for doc in documents if doc.path and event.document_path and (doc.path == event.document_path or event.document_path.endswith(doc.path)) %}
             {% set ns.doc = doc %}
           {% endfor %}
+          {% if event.kind == 'discovered' %}
+            {% set ns.source = true %}
+          {% endif %}
           {% if event.kind == 'reply' and ns.doc and ns.doc.path %}
             {% set ns.view = '/cases/' ~ finding.id ~ '/files/' ~ ns.doc.id %}
           {% elif ns.job and ns.job.packet_path %}
@@ -154,8 +157,14 @@
             <strong>{{ event.summary }}</strong>
           </div>
           {% if event.detail %}<p class="muted">{{ event.detail }}</p>{% endif %}
-          {% if ns.view %}
+          {% if ns.view or ns.source %}
           <div class="rail-actions">
+            {% if ns.source %}
+            <button type="button" class="btn icon" data-source="{{ finding.id }}" aria-label="View source message" title="View source message">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4V6Z"/><path d="m4 7 8 6 8-6"/></svg>
+            </button>
+            {% endif %}
+            {% if ns.view %}
             <button type="button" class="btn icon" data-view-src="{{ ns.view }}" aria-label="View" title="View">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
@@ -172,6 +181,7 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-6 16-2-6-8-2Z"/></svg>
               </button>
             </form>
+            {% endif %}
             {% endif %}
           </div>
           {% endif %}
