@@ -856,8 +856,57 @@ function bindPitch() {
   let pageNumber = 1;
   let renderTask = null;
   let renderToken = 0;
+  const slideBox = new Map();
   pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/pdf.worker.min.js";
   const loading = pdfjsLib.getDocument(host.dataset.src).promise;
+
+  async function slideFractions(page) {
+    if (slideBox.has(page.pageNumber)) return slideBox.get(page.pageNumber);
+    const probe = page.getViewport({ scale: 0.5, rotation: page.rotate || 0 });
+    const sample = document.createElement("canvas");
+    sample.width = Math.ceil(probe.width);
+    sample.height = Math.ceil(probe.height);
+    await page.render({ canvasContext: sample.getContext("2d", { willReadFrequently: true }), viewport: probe }).promise;
+    const ctx = sample.getContext("2d", { willReadFrequently: true });
+    const width = sample.width;
+    const height = sample.height;
+    const data = ctx.getImageData(0, 0, width, height).data;
+    const bgAt = (x, y) => {
+      const i = (y * width + x) * 4;
+      return [data[i], data[i + 1], data[i + 2]];
+    };
+    const bg = bgAt(0, 0);
+    const isMargin = (i) => Math.abs(data[i] - bg[0]) < 18 && Math.abs(data[i + 1] - bg[1]) < 18 && Math.abs(data[i + 2] - bg[2]) < 18;
+    let minX = width;
+    let minY = height;
+    let maxX = 0;
+    let maxY = 0;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const i = (y * width + x) * 4;
+        if (isMargin(i)) continue;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+    let box = { sx: 0, sy: 0, sw: 1, sh: 1 };
+    if (maxX > minX && maxY > minY) {
+      let sx = minX / width;
+      let sy = minY / height;
+      let sw = (maxX - minX + 1) / width;
+      let sh = (maxY - minY + 1) / height;
+      const pixelAspect = (sw * width) / (sh * height);
+      if (pixelAspect > 1.65 && pixelAspect < 1.9) {
+        sh = (sw * width * 9) / (height * 16);
+        sy = Math.max(0, Math.min(1 - sh, ((minY + maxY) / 2) / height - sh / 2));
+      }
+      if (sw < 0.98 || sh < 0.98) box = { sx, sy, sw, sh };
+    }
+    slideBox.set(page.pageNumber, box);
+    return box;
+  }
 
   function live() {
     return document.documentElement.classList.contains("pitch-live");
@@ -873,27 +922,50 @@ function bindPitch() {
     if (token !== renderToken) return;
     const page = await pdf.getPage(pageNumber);
     if (token !== renderToken) return;
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const box = await slideFractions(page);
+    if (token !== renderToken) return;
     const rotation = page.rotate || 0;
     const base = page.getViewport({ scale: 1, rotation });
     const pixelRatio = window.devicePixelRatio || 1;
-    const viewport = page.getViewport({
-      scale: Math.min(width / base.width, height / base.height) * pixelRatio,
-      rotation,
-    });
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    canvas.style.width = (viewport.width / pixelRatio) + "px";
-    canvas.style.height = (viewport.height / pixelRatio) + "px";
-    const task = page.render({ canvasContext: canvas.getContext("2d"), viewport });
+    const scale = Math.min(window.innerWidth / (base.width * box.sw), window.innerHeight / (base.height * box.sh)) * pixelRatio;
+    const viewport = page.getViewport({ scale, rotation });
+    const cropX = Math.ceil(viewport.width * box.sx);
+    const cropY = Math.ceil(viewport.height * box.sy);
+    const cropW = Math.floor(viewport.width * (box.sx + box.sw)) - cropX;
+    const cropH = Math.floor(viewport.height * (box.sy + box.sh)) - cropY;
+    const sheet = document.createElement("canvas");
+    sheet.width = Math.ceil(viewport.width);
+    sheet.height = Math.ceil(viewport.height);
+    const task = page.render({ canvasContext: sheet.getContext("2d"), viewport });
     renderTask = task;
     try {
       await task.promise;
     } catch (error) {
       if (error && error.name === "RenderingCancelledException") return;
       showToast("Could not open that page", "error");
+      return;
     }
+    if (token !== renderToken) return;
+    canvas.width = Math.max(1, Math.ceil(cropW));
+    canvas.height = Math.max(1, Math.ceil(cropH));
+    let cssW = cropW / pixelRatio;
+    let cssH = cropH / pixelRatio;
+    if (Math.abs(cssW - window.innerWidth) < 4) cssW = window.innerWidth;
+    if (Math.abs(cssH - window.innerHeight) < 4) cssH = window.innerHeight;
+    canvas.style.width = cssW + "px";
+    canvas.style.height = cssH + "px";
+    const inset = 2;
+    canvas.getContext("2d").drawImage(
+      sheet,
+      cropX + inset,
+      cropY + inset,
+      Math.max(1, cropW - inset * 2),
+      Math.max(1, cropH - inset * 2),
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
   }
 
   async function show(delta) {
