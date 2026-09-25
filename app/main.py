@@ -2,20 +2,24 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import re
 import threading
 from pathlib import Path
+from urllib.parse import quote
 
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.categories import CATEGORIES, CATEGORY_ICONS, CATEGORY_LABELS
-from app.config import default_token_budget, google_secret_path, host, oauth_redirect_uri, port
+from app.config import access_password, default_token_budget, google_secret_path, host, oauth_redirect_uri, port
 from app.connectors.base import ConnectorError
 from app.connectors.imap import check_login
 from app.db import (
@@ -107,6 +111,44 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="Lifevault", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(ROOT / "app" / "static")), name="static")
 
+ACCESS_COOKIE = "lifevault_access"
+
+
+def _access_token(password: str) -> str:
+    return hmac.new(b"lifevault-access-v1", password.encode(), hashlib.sha256).hexdigest()
+
+
+def _password_matches(given: str, expected: str) -> bool:
+    return hmac.compare_digest(
+        hashlib.sha256(given.encode()).digest(),
+        hashlib.sha256(expected.encode()).digest(),
+    )
+
+
+def _safe_next(target: str) -> str:
+    if target.startswith("/") and not target.startswith("//"):
+        return target
+    return "/"
+
+
+class AccessGate(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        password = access_password()
+        path = request.url.path
+        if not password or path.startswith("/static") or path in {"/access", "/robots.txt"}:
+            return await call_next(request)
+        token = request.cookies.get(ACCESS_COOKIE, "")
+        expected = _access_token(password)
+        if len(token) == len(expected) and hmac.compare_digest(token, expected):
+            return await call_next(request)
+        nxt = path
+        if request.url.query:
+            nxt += "?" + request.url.query
+        return RedirectResponse("/access?next=" + quote(nxt, safe="/"), status_code=303)
+
+
+app.add_middleware(AccessGate)
+
 
 def _redirect(path: str, notice: str, kind: str = "success") -> RedirectResponse:
     sep = "&" if "?" in path else "?"
@@ -160,6 +202,39 @@ def _vault_context(status: str, category: str) -> dict:
         "estate_discharge_note": setting("estate_discharge_note"),
         "estate_events": list_estate_events(),
     }
+
+
+@app.get("/robots.txt")
+def robots_txt():
+    return PlainTextResponse("User-agent: *\nDisallow: /\n", media_type="text/plain")
+
+
+@app.get("/access")
+def access_page(request: Request, next: str = "/"):
+    password = access_password()
+    token = request.cookies.get(ACCESS_COOKIE, "")
+    expected_token = _access_token(password) if password else ""
+    if password and len(token) == len(expected_token) and hmac.compare_digest(token, expected_token):
+        return RedirectResponse(_safe_next(next), status_code=303)
+    return _render(request, "access.html", page="access", next=_safe_next(next))
+
+
+@app.post("/access")
+def access_login(request: Request, password: str = Form(""), next: str = Form("/")):
+    expected = access_password()
+    if not expected or not _password_matches(password, expected):
+        return _redirect("/access", "That password is not right.", "error")
+    response = RedirectResponse(_safe_next(next), status_code=303)
+    response.set_cookie(
+        ACCESS_COOKIE,
+        _access_token(expected),
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https",
+        max_age=60 * 60 * 12,
+        path="/",
+    )
+    return response
 
 
 @app.get("/")

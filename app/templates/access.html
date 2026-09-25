@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Lifevault access</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <script>
+    (function () {
+      var saved = localStorage.getItem("lifevault-theme");
+      var dark = saved === "dark" || (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      if (dark) document.documentElement.classList.add("dark");
+    })();
+  </script>
+</head>
+<body>
+  <main class="wrap">
+    <section class="panel stack vault-gate">
+      <p class="kicker">Idealizer</p>
+      <h1>Lifevault</h1>
+      <p>Private demo for invited guests. Lifevault does not ask for a bank, email, or Google password on this screen.</p>
+      <form method="post" action="/access" class="stack">
+        <input type="hidden" name="next" value="{{ next }}">
+        <label>Access password
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <button class="btn primary" type="submit">Continue</button>
+      </form>
+    </section>
+  </main>
+  <div id="toasts" aria-live="polite"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

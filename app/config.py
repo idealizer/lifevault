@@ -83,6 +83,10 @@ def body_chars() -> int:
     return min(20000, max(500, value))
 
 
+def access_password() -> str:
+    return env("LIFE_ACCESS_PASSWORD")
+
+
 def default_token_budget() -> int:
     try:
         value = int(env("LIFE_TOKEN_BUDGET", "2000000") or "2000000")

@@ -6,6 +6,7 @@ services:
       LIFE_HOST: 0.0.0.0
       LIFE_PORT: "8765"
       LIFE_DB: /data/lifevault.db
+      LIFE_ACCESS_PASSWORD: hackathon-zh
     volumes:
       - lifevault_data:/data
     expose:

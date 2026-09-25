@@ -128,6 +128,28 @@ def test_source_message_for_finding():
     assert body["subject"] == "Your statement"
 
 
+def test_access_gate_requires_password(monkeypatch):
+    init_db()
+    monkeypatch.setenv("LIFE_ACCESS_PASSWORD", "hackathon-zh")
+    client = TestClient(app)
+    blocked = client.get("/pitch", follow_redirects=False)
+    assert blocked.status_code == 303
+    assert blocked.headers["location"].startswith("/access")
+    page = client.get("/access")
+    assert page.status_code == 200
+    assert "Access password" in page.text
+    bad = client.post("/access", data={"password": "nope", "next": "/pitch"}, follow_redirects=False)
+    assert bad.status_code == 303
+    assert "not%20right" in bad.headers["location"]
+    ok = client.post("/access", data={"password": "hackathon-zh", "next": "/pitch"}, follow_redirects=False)
+    assert ok.status_code == 303
+    assert ok.headers["location"] == "/pitch"
+    opened = client.get("/pitch")
+    assert opened.status_code == 200
+    sneaky = client.post("/access", data={"password": "hackathon-zh", "next": "https://example.com"}, follow_redirects=False)
+    assert sneaky.headers["location"] == "/"
+
+
 def test_pitch_upload_and_page():
     init_db()
     client = TestClient(app)
