@@ -50,11 +50,26 @@
 </section>
 <section class="panel stack">
   <h2>Pitch</h2>
-  <p class="muted">Upload the deck shown on the Pitch page. Present opens it fullscreen for a meeting.</p>
+  <p class="muted">Upload a PDF deck, an MP4, or both. Choose which one the Pitch page shows. Present plays it fullscreen.</p>
   <form method="post" action="/settings/pitch" enctype="multipart/form-data" class="stack">
+    <fieldset class="pitch-switch">
+      <legend>Show on the pitch page</legend>
+      <label>
+        <input type="radio" name="pitch_mode" value="pdf" {% if pitch_mode != 'video' %}checked{% endif %}>
+        <span>PDF</span>
+      </label>
+      <label>
+        <input type="radio" name="pitch_mode" value="video" {% if pitch_mode == 'video' %}checked{% endif %}>
+        <span>Video</span>
+      </label>
+    </fieldset>
     <label>Pitch deck
       {% if pitch_name %}<span class="pill">Saved: {{ pitch_name }}</span>{% endif %}
       <input type="file" name="pitch_pdf" accept="application/pdf,.pdf">
+    </label>
+    <label>Pitch video
+      {% if pitch_video_name %}<span class="pill">Saved: {{ pitch_video_name }}</span>{% endif %}
+      <input type="file" name="pitch_video" accept="video/mp4,.mp4">
     </label>
     <button class="btn primary" type="submit">Save pitch</button>
   </form>

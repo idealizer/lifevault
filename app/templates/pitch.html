@@ -3,9 +3,13 @@
 {% block content %}
 <section class="vault-head">
   <div>
-    <p class="kicker">Deck</p>
+    <p class="kicker">{% if show_video %}Video{% else %}Deck{% endif %}</p>
     <h1>Pitch</h1>
-    {% if has_pitch %}<p class="muted">{{ pitch_name }}. Present fills the screen. Click the left or right side, or use the arrow keys. Escape leaves the deck.</p>{% endif %}
+    {% if show_video %}
+    <p class="muted">{{ pitch_name }}. Present plays it fullscreen. Escape leaves the video.</p>
+    {% elif has_pitch %}
+    <p class="muted">{{ pitch_name }}. Present fills the screen. Click the left or right side, or use the arrow keys. Escape leaves the deck.</p>
+    {% endif %}
   </div>
   {% if has_pitch %}
   <button type="button" class="btn primary" id="pitch-fullscreen" aria-label="Present fullscreen">
@@ -14,7 +18,9 @@
   </button>
   {% endif %}
 </section>
-{% if has_pitch %}
+{% if show_video %}
+<video id="pitch-video" class="pitch-video" src="/pitch/video" controls playsinline></video>
+{% elif has_pitch %}
 <div id="pdf-pages" class="pdf-pages" data-src="/pitch/deck"></div>
 <div id="pitch-stage" class="pitch-stage" hidden>
   <div class="pitch-slide">
@@ -24,7 +30,7 @@
 <script src="/static/pdf.min.js"></script>
 {% else %}
 <section class="panel">
-  <p>No pitch deck yet. Upload a PDF in <a href="/settings">Settings</a>.</p>
+  <p>Nothing to present yet. Upload a PDF or an MP4 in <a href="/settings">Settings</a>.</p>
 </section>
 {% endif %}
 {% endblock %}

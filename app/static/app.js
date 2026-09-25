@@ -877,7 +877,54 @@ function bindCaseViewer() {
   });
 }
 
+function bindPitchVideo(video) {
+  const button = document.getElementById("pitch-fullscreen");
+  if (!button) return;
+
+  function live() {
+    return document.documentElement.classList.contains("pitch-live");
+  }
+
+  function closeStage() {
+    document.documentElement.classList.remove("pitch-live");
+    video.pause();
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+
+  button.addEventListener("click", async () => {
+    document.documentElement.classList.add("pitch-live");
+    const target = video.requestFullscreen ? video : document.documentElement;
+    const request = target.requestFullscreen || target.webkitRequestFullscreen;
+    if (request) {
+      try {
+        await request.call(target);
+      } catch (error) {
+        /* The video still covers the screen when fullscreen is blocked. */
+      }
+    }
+    try {
+      await video.play();
+    } catch (error) {
+      showToast("The browser blocked playback. Press play on the video.", "alert");
+    }
+  });
+  document.addEventListener("fullscreenchange", () => {
+    if (!live()) return;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) closeStage();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (!live() || event.key !== "Escape") return;
+    event.preventDefault();
+    closeStage();
+  });
+}
+
 function bindPitch() {
+  const video = document.getElementById("pitch-video");
+  if (video) {
+    bindPitchVideo(video);
+    return;
+  }
   const button = document.getElementById("pitch-fullscreen");
   const stage = document.getElementById("pitch-stage");
   const canvas = document.getElementById("pitch-canvas");

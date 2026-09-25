@@ -74,7 +74,16 @@ from app.pipeline.guides import build_guide, openai_ready
 from app.pipeline.estate_actions import ESTATE_ACTIONS, actions_for
 from app.pipeline.import_mail import ImportError, parse_mail_file
 from app.pipeline.letters import estate_file, reply_path, save_estate_file, save_reply_file
-from app.pipeline.pitch import pitch_file, pitch_filename, save_pitch_file
+from app.pipeline.pitch import (
+    pitch_display_mode,
+    pitch_file,
+    pitch_filename,
+    pitch_video_file,
+    pitch_video_filename,
+    save_pitch_file,
+    save_pitch_video,
+    set_pitch_mode,
+)
 from app.pipeline.queue import start_queue
 from app.pipeline.scan import backfill_signals, execute_scan, message_body, window_start
 from app.vault_store import KINDS, VaultError, counts as vault_counts
@@ -670,6 +679,8 @@ def settings_page(request: Request):
         death_certificate_name=(estate_file("death_certificate").name if estate_file("death_certificate") else ""),
         authorisation_name=(estate_file("executor_authorisation").name if estate_file("executor_authorisation") else ""),
         pitch_name=pitch_filename() if pitch_file() else "",
+        pitch_video_name=pitch_video_filename() if pitch_video_file() else "",
+        pitch_mode=pitch_display_mode(),
     )
 
 
@@ -762,13 +773,17 @@ async def save_estate(
 
 @app.get("/pitch")
 def pitch_page(request: Request):
-    stored = pitch_file()
+    mode = pitch_display_mode()
+    has_pdf = pitch_file() is not None
+    has_video = pitch_video_file() is not None
+    show_video = mode == "video" and has_video
     return _render(
         request,
         "pitch.html",
         page="pitch",
-        has_pitch=stored is not None,
-        pitch_name=pitch_filename() or "Pitch deck",
+        has_pitch=has_pdf or has_video,
+        show_video=show_video,
+        pitch_name=(pitch_video_filename() if show_video else pitch_filename()) or "Pitch",
     )
 
 
@@ -785,15 +800,39 @@ def pitch_deck():
     )
 
 
+@app.get("/pitch/video")
+def pitch_video():
+    stored = pitch_video_file()
+    if not stored:
+        raise HTTPException(404, "No pitch video is stored.")
+    return FileResponse(
+        stored,
+        media_type="video/mp4",
+        content_disposition_type="inline",
+        filename=pitch_video_filename() or "deck.mp4",
+    )
+
+
 @app.post("/settings/pitch")
-async def save_pitch(pitch_pdf: UploadFile | None = File(None)):
-    if not pitch_pdf or not pitch_pdf.filename:
-        return _redirect("/settings", "Choose a PDF to upload.", "alert")
+async def save_pitch(
+    pitch_mode: str = Form("pdf"),
+    pitch_pdf: UploadFile | None = File(None),
+    pitch_video: UploadFile | None = File(None),
+):
     try:
-        save_pitch_file(pitch_pdf.filename, await pitch_pdf.read())
+        if pitch_pdf and pitch_pdf.filename:
+            save_pitch_file(pitch_pdf.filename, await pitch_pdf.read())
+        if pitch_video and pitch_video.filename:
+            save_pitch_video(pitch_video.filename, await pitch_video.read())
     except ValueError as exc:
         return _redirect("/settings", str(exc), "error")
-    return _redirect("/settings", "Pitch deck saved.")
+    mode = "video" if pitch_mode == "video" else "pdf"
+    if mode == "video" and pitch_video_file() is None:
+        return _redirect("/settings", "Upload an MP4 before showing the video.", "alert")
+    if mode == "pdf" and pitch_file() is None:
+        return _redirect("/settings", "Upload a PDF before showing the deck.", "alert")
+    set_pitch_mode(mode)
+    return _redirect("/settings", "Pitch saved.")
 
 
 @app.post("/sources/imap")

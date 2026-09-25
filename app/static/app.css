@@ -301,6 +301,35 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 #credential-list .secret { margin-left: auto; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #credential-dialog { width: min(480px, calc(100% - 32px)); }
 #credential-dialog textarea, #credential-dialog input, #credential-dialog select { width: 100%; box-sizing: border-box; }
+.pitch-switch { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pitch-switch legend { width: 100%; padding: 0; color: var(--text); }
+.pitch-switch label { position: relative; }
+.pitch-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.pitch-switch span {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.pitch-switch input:checked + span { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.pitch-switch input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pitch-video { width: 100%; max-height: calc(100vh - 180px); background: #000; border-radius: 12px; }
+html.pitch-live .pitch-video,
+.pitch-video:fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+  border-radius: 0;
+  background: #000;
+}
 #pitch-fullscreen { gap: 8px; }
 #pitch-fullscreen svg { width: 18px; height: 18px; }
 html.pitch-live,

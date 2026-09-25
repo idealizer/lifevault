@@ -12,7 +12,7 @@ from app.db import (
     upsert_message,
 )
 from app.main import app
-from app.pipeline.pitch import pitch_file
+from app.pipeline.pitch import pitch_file, pitch_video_file
 
 
 def test_pages_render():
@@ -134,7 +134,7 @@ def test_pitch_upload_and_page():
     empty = client.get("/pitch")
     assert empty.status_code == 200
     assert "Pitch" in empty.text
-    assert "No pitch deck yet" in empty.text
+    assert "Nothing to present yet" in empty.text
     missing = client.get("/pitch/deck")
     assert missing.status_code == 404
     rejected = client.post(
@@ -161,3 +161,23 @@ def test_pitch_upload_and_page():
     assert deck.content.startswith(b"%PDF")
     settings = client.get("/settings")
     assert "Investor deck.pdf" in settings.text
+    clip = b"\x00\x00\x00\x18ftypisom" + b"\x00" * 8
+    video = client.post(
+        "/settings/pitch",
+        data={"pitch_mode": "video"},
+        files={"pitch_video": ("talk.mp4", clip, "video/mp4")},
+        follow_redirects=False,
+    )
+    assert video.status_code == 303
+    assert pitch_video_file() is not None
+    shown = client.get("/pitch")
+    assert 'src="/pitch/video"' in shown.text
+    assert "talk.mp4" in shown.text
+    media = client.get("/pitch/video")
+    assert media.status_code == 200
+    assert media.content.startswith(clip)
+    back = client.post("/settings/pitch", data={"pitch_mode": "pdf"}, follow_redirects=False)
+    assert back.status_code == 303
+    deck_again = client.get("/pitch")
+    assert "Investor deck.pdf" in deck_again.text
+    assert 'src="/pitch/video"' not in deck_again.text
