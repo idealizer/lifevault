@@ -854,63 +854,91 @@ function bindPitch() {
   if (!button || !stage || !canvas || !host || !host.dataset.src || !window.pdfjsLib) return;
   let pdf = null;
   let pageNumber = 1;
+  let renderTask = null;
+  let renderToken = 0;
   pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/pdf.worker.min.js";
   const loading = pdfjsLib.getDocument(host.dataset.src).promise;
 
+  function live() {
+    return document.documentElement.classList.contains("pitch-live");
+  }
+
   async function draw() {
+    const token = ++renderToken;
+    if (renderTask) {
+      renderTask.cancel();
+      renderTask = null;
+    }
     if (!pdf) pdf = await loading;
+    if (token !== renderToken) return;
     const page = await pdf.getPage(pageNumber);
-    const slide = canvas.parentElement.getBoundingClientRect();
-    const width = Math.max(slide.width - 32, 320);
-    const height = Math.max(slide.height - 32, 240);
-    const base = page.getViewport({ scale: 1 });
+    if (token !== renderToken) return;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const rotation = page.rotate || 0;
+    const base = page.getViewport({ scale: 1, rotation });
     const pixelRatio = window.devicePixelRatio || 1;
-    const viewport = page.getViewport({ scale: Math.min(width / base.width, height / base.height) * pixelRatio });
+    const viewport = page.getViewport({
+      scale: Math.min(width / base.width, height / base.height) * pixelRatio,
+      rotation,
+    });
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     canvas.style.width = (viewport.width / pixelRatio) + "px";
     canvas.style.height = (viewport.height / pixelRatio) + "px";
-    await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-    const count = document.getElementById("pitch-count");
-    if (count) count.textContent = pageNumber + " / " + pdf.numPages;
+    const task = page.render({ canvasContext: canvas.getContext("2d"), viewport });
+    renderTask = task;
+    try {
+      await task.promise;
+    } catch (error) {
+      if (error && error.name === "RenderingCancelledException") return;
+      showToast("Could not open that page", "error");
+    }
   }
 
   async function show(delta) {
     if (!pdf) pdf = await loading;
-    pageNumber = Math.min(pdf.numPages, Math.max(1, pageNumber + delta));
+    const next = Math.min(pdf.numPages, Math.max(1, pageNumber + delta));
+    if (delta !== 0 && next === pageNumber) return;
+    pageNumber = next;
     await draw();
   }
 
   function closeStage() {
-    stage.classList.remove("is-open");
+    document.documentElement.classList.remove("pitch-live");
     stage.hidden = true;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
 
   button.addEventListener("click", async () => {
     stage.hidden = false;
-    stage.classList.add("is-open");
-    try {
-      await stage.requestFullscreen();
-    } catch (error) {
-      /* CSS overlay still covers the screen when fullscreen is blocked. */
+    document.documentElement.classList.add("pitch-live");
+    const root = document.documentElement;
+    const request = root.requestFullscreen || root.webkitRequestFullscreen;
+    if (request) {
+      try {
+        await request.call(root);
+      } catch (error) {
+        /* The page still covers the screen when the browser blocks fullscreen. */
+      }
     }
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     await show(0);
   });
-  document.getElementById("pitch-prev").addEventListener("click", () => show(-1));
-  document.getElementById("pitch-next").addEventListener("click", () => show(1));
-  document.getElementById("pitch-exit").addEventListener("click", () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else closeStage();
+  stage.addEventListener("click", (event) => {
+    if (!live()) return;
+    const mid = stage.getBoundingClientRect().left + stage.clientWidth / 2;
+    show(event.clientX < mid ? -1 : 1);
   });
   document.addEventListener("fullscreenchange", () => {
-    if (document.fullscreenElement) draw();
-    else closeStage();
+    if (!live()) return;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) closeStage();
   });
   window.addEventListener("resize", () => {
-    if (!stage.hidden) draw();
+    if (live()) draw();
   });
   document.addEventListener("keydown", (event) => {
-    if (stage.hidden) return;
+    if (!live()) return;
     if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
       event.preventDefault();
       show(1);
@@ -925,7 +953,8 @@ function bindPitch() {
       event.preventDefault();
       pageNumber = pdf.numPages;
       draw();
-    } else if (event.key === "Escape" && !document.fullscreenElement) {
+    } else if (event.key === "Escape") {
+      event.preventDefault();
       closeStage();
     }
   });

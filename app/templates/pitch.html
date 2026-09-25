@@ -5,7 +5,7 @@
   <div>
     <p class="kicker">Deck</p>
     <h1>Pitch</h1>
-    {% if has_pitch %}<p class="muted">{{ pitch_name }}. Arrow keys move between pages in fullscreen.</p>{% endif %}
+    {% if has_pitch %}<p class="muted">{{ pitch_name }}. Present fills the screen. Click the left or right side, or use the arrow keys. Escape leaves the deck.</p>{% endif %}
   </div>
   {% if has_pitch %}
   <button type="button" class="btn primary" id="pitch-fullscreen" aria-label="Present fullscreen">
@@ -19,18 +19,6 @@
 <div id="pitch-stage" class="pitch-stage" hidden>
   <div class="pitch-slide">
     <canvas id="pitch-canvas"></canvas>
-  </div>
-  <div class="pitch-bar">
-    <button type="button" class="btn icon" id="pitch-prev" aria-label="Previous page">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-    </button>
-    <span id="pitch-count" class="pill">1 / 1</span>
-    <button type="button" class="btn icon" id="pitch-next" aria-label="Next page">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-    </button>
-    <button type="button" class="btn icon" id="pitch-exit" aria-label="Exit fullscreen">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>
   </div>
 </div>
 <script src="/static/pdf.min.js"></script>
