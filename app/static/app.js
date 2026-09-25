@@ -93,6 +93,37 @@ function setCount(name, value) {
   });
 }
 
+const STAGE_LABELS = {
+  discovered: "Discovered",
+  candidate: "Discovered",
+  identified: "Identified",
+  secured: "Secured",
+  processing: "Processing",
+  confirmed: "Processing",
+  closed: "Closed",
+  dismissed: "Dismissed",
+};
+
+function stageLabel(status) {
+  return STAGE_LABELS[status] || status;
+}
+
+function applyFindingCounts(counts) {
+  if (!counts) return;
+  ["candidate", "confirmed", "dismissed", "active", "all", "discovered", "identified", "secured", "processing", "closed", "open", "in_process"].forEach((key) => {
+    if (counts[key] !== undefined) setCount(key, counts[key]);
+  });
+}
+
+function paintFindingStatus(card, status) {
+  if (!card) return;
+  card.dataset.status = status;
+  const pill = card.querySelector(".js-status");
+  if (!pill) return;
+  pill.className = "pill js-status status-" + status;
+  pill.textContent = stageLabel(status);
+}
+
 function iconLink(label, href, kind) {
   const link = document.createElement("a");
   link.className = "btn icon";
@@ -348,20 +379,11 @@ function bindStepDialog() {
       })
       .then((data) => {
         if (card) {
-          card.dataset.status = data.status || "processing";
-          const pill = card.querySelector(".js-status");
-          if (pill) {
-            pill.className = "pill js-status status-" + card.dataset.status;
-            pill.textContent = card.dataset.status;
-          }
+          paintFindingStatus(card, data.status || "processing");
           paintActions(card, card.dataset.status);
           document.getElementById("step-title").textContent = "Add a step";
-          if (data.counts) {
-            ["candidate", "confirmed", "dismissed", "active", "all", "discovered", "identified", "secured", "processing", "closed", "open", "in_process"].forEach((key) => {
-              if (data.counts[key] !== undefined) setCount(key, data.counts[key]);
-            });
-          }
         }
+        applyFindingCounts(data.counts);
         document.querySelectorAll("#step-options input").forEach((box) => {
           box.checked = false;
         });
@@ -392,17 +414,8 @@ function onFindingSubmit(event) {
     })
     .then((data) => {
       const status = data.status;
-      card.dataset.status = status;
-      const pill = card.querySelector(".js-status");
-      if (pill) {
-        pill.className = "pill js-status status-" + status;
-        pill.textContent = status;
-      }
-      if (data.counts) {
-        ["candidate", "confirmed", "dismissed", "active", "all", "discovered", "identified", "secured", "processing", "closed", "open", "in_process"].forEach((key) => {
-          if (data.counts[key] !== undefined) setCount(key, data.counts[key]);
-        });
-      }
+      paintFindingStatus(card, status);
+      applyFindingCounts(data.counts);
       if (findingLeavesView(status)) {
         const section = card.closest("section.panel");
         const category = card.dataset.category;
@@ -563,17 +576,21 @@ function paintGuide(payload, findingId) {
       button.type = "button";
       button.className = "btn primary";
       button.textContent = "Queue letter";
-      button.addEventListener("click", () => queueGuideLetter(findingId, step.letter_action, button));
-      actions.appendChild(button);
+      const status = document.createElement("span");
+      status.className = "step-status";
+      actions.dataset.action = step.letter_action;
+      button.addEventListener("click", () => queueGuideLetter(findingId, step.letter_action, button, actions));
+      actions.append(button, status);
     }
     if (actions.childElementCount) copy.appendChild(actions);
     item.append(number, copy);
     list.appendChild(item);
   });
   body.appendChild(list);
+  list.querySelectorAll("[data-action]").forEach((row) => watchGuideJob(findingId, row));
 }
 
-function queueGuideLetter(findingId, action, button) {
+function queueGuideLetter(findingId, action, button, row) {
   button.disabled = true;
   const body = new FormData();
   body.append("action", action);
@@ -584,22 +601,36 @@ function queueGuideLetter(findingId, action, button) {
     })
     .then((data) => {
       const card = document.querySelector(".asset[data-finding='" + findingId + "']");
-      if (card) {
-        card.dataset.status = data.status || "confirmed";
-        const pill = card.querySelector(".js-status");
-        if (pill) {
-          pill.className = "pill js-status status-" + card.dataset.status;
-          pill.textContent = card.dataset.status;
-        }
-        paintActions(card, card.dataset.status);
-      }
-      showToast("Letter queued", "success");
+      paintFindingStatus(card, data.status || "processing");
+      if (card) paintActions(card, card.dataset.status);
+      applyFindingCounts(data.counts);
+      button.disabled = false;
+      watchGuideJob(findingId, row);
+      showToast("Queued", "success");
       pollQueue();
     })
     .catch(() => {
       button.disabled = false;
       showToast("Could not queue that letter", "error");
     });
+}
+
+function watchGuideJob(findingId, row) {
+  const tick = () => {
+    const dialog = document.getElementById("guide-dialog");
+    if (!dialog || !dialog.open || !row.isConnected) return;
+    fetch("/queue.json")
+      .then((response) => response.json())
+      .then((data) => {
+        if (!dialog.open || !row.isConnected) return;
+        const jobs = (data.jobs || []).filter((job) => String(job.finding_id) === String(findingId) && job.action === row.dataset.action);
+        paintChoiceStatus(row, jobs);
+        const active = jobs.some((job) => job.status === "queued" || job.status === "running");
+        if (active) setTimeout(tick, 1500);
+      })
+      .catch(() => {});
+  };
+  tick();
 }
 
 function bindGuides() {
