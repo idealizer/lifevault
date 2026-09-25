@@ -330,6 +330,8 @@ html.pitch-live .pitch-video,
   border-radius: 0;
   background: #000;
 }
+.pitch-repo { margin: 8px 0 0; }
+.pitch-repo a { color: var(--text); text-underline-offset: 3px; }
 #pitch-fullscreen { gap: 8px; }
 #pitch-fullscreen svg { width: 18px; height: 18px; }
 html.pitch-live,

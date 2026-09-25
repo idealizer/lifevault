@@ -5,11 +5,7 @@
   <div>
     <p class="kicker">{% if show_video %}Video{% else %}Deck{% endif %}</p>
     <h1>Pitch</h1>
-    {% if show_video %}
-    <p class="muted">{{ pitch_name }}. Present plays it fullscreen. Escape leaves the video.</p>
-    {% elif has_pitch %}
-    <p class="muted">{{ pitch_name }}. Present fills the screen. Click the left or right side, or use the arrow keys. Escape leaves the deck.</p>
-    {% endif %}
+    <p class="pitch-repo"><a href="https://github.com/idealizer/lifevault">https://github.com/idealizer/lifevault</a></p>
   </div>
   {% if has_pitch %}
   <button type="button" class="btn primary" id="pitch-fullscreen" aria-label="Present fullscreen">

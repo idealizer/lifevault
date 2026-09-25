@@ -155,7 +155,7 @@ def test_pitch_upload_and_page():
     assert stored.read_bytes().startswith(b"%PDF")
     page = client.get("/pitch")
     assert "Present fullscreen" in page.text
-    assert "Investor deck.pdf" in page.text
+    assert "https://github.com/idealizer/lifevault" in page.text
     deck = client.get("/pitch/deck")
     assert deck.status_code == 200
     assert deck.content.startswith(b"%PDF")
@@ -172,12 +172,12 @@ def test_pitch_upload_and_page():
     assert pitch_video_file() is not None
     shown = client.get("/pitch")
     assert 'src="/pitch/video"' in shown.text
-    assert "talk.mp4" in shown.text
+    assert "talk.mp4" not in shown.text
     media = client.get("/pitch/video")
     assert media.status_code == 200
     assert media.content.startswith(clip)
     back = client.post("/settings/pitch", data={"pitch_mode": "pdf"}, follow_redirects=False)
     assert back.status_code == 303
     deck_again = client.get("/pitch")
-    assert "Investor deck.pdf" in deck_again.text
+    assert "https://github.com/idealizer/lifevault" in deck_again.text
     assert 'src="/pitch/video"' not in deck_again.text
