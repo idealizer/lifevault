@@ -132,9 +132,11 @@ def test_access_gate_requires_password(monkeypatch):
     init_db()
     monkeypatch.setenv("LIFE_ACCESS_PASSWORD", "hackathon-zh")
     client = TestClient(app)
-    blocked = client.get("/pitch", follow_redirects=False)
+    blocked = client.get("/", follow_redirects=False)
     assert blocked.status_code == 303
     assert blocked.headers["location"].startswith("/access")
+    pitch = client.get("/pitch")
+    assert pitch.status_code == 200
     page = client.get("/access")
     assert page.status_code == 200
     assert "Access password" in page.text
@@ -144,7 +146,7 @@ def test_access_gate_requires_password(monkeypatch):
     ok = client.post("/access", data={"password": "hackathon-zh", "next": "/pitch"}, follow_redirects=False)
     assert ok.status_code == 303
     assert ok.headers["location"] == "/pitch"
-    opened = client.get("/pitch")
+    opened = client.get("/")
     assert opened.status_code == 200
     sneaky = client.post("/access", data={"password": "hackathon-zh", "next": "https://example.com"}, follow_redirects=False)
     assert sneaky.headers["location"] == "/"

@@ -135,7 +135,7 @@ class AccessGate(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         password = access_password()
         path = request.url.path
-        if not password or path.startswith("/static") or path in {"/access", "/robots.txt"}:
+        if not password or path.startswith("/static") or path in {"/access", "/robots.txt"} or path == "/pitch" or path.startswith("/pitch/"):
             return await call_next(request)
         token = request.cookies.get(ACCESS_COOKIE, "")
         expected = _access_token(password)
