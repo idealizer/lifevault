@@ -74,6 +74,7 @@ from app.pipeline.guides import build_guide, openai_ready
 from app.pipeline.estate_actions import ESTATE_ACTIONS, actions_for
 from app.pipeline.import_mail import ImportError, parse_mail_file
 from app.pipeline.letters import estate_file, reply_path, save_estate_file, save_reply_file
+from app.pipeline.pitch import pitch_file, pitch_filename, save_pitch_file
 from app.pipeline.queue import start_queue
 from app.pipeline.scan import backfill_signals, execute_scan, message_body, window_start
 from app.vault_store import KINDS, VaultError, counts as vault_counts
@@ -668,6 +669,7 @@ def settings_page(request: Request):
         has_authorisation=estate_file("executor_authorisation") is not None,
         death_certificate_name=(estate_file("death_certificate").name if estate_file("death_certificate") else ""),
         authorisation_name=(estate_file("executor_authorisation").name if estate_file("executor_authorisation") else ""),
+        pitch_name=pitch_filename() if pitch_file() else "",
     )
 
 
@@ -756,6 +758,42 @@ async def save_estate(
     except ValueError as exc:
         return _redirect("/settings", str(exc), "error")
     return _redirect("/settings", "Estate documents saved.")
+
+
+@app.get("/pitch")
+def pitch_page(request: Request):
+    stored = pitch_file()
+    return _render(
+        request,
+        "pitch.html",
+        page="pitch",
+        has_pitch=stored is not None,
+        pitch_name=pitch_filename() or "Pitch deck",
+    )
+
+
+@app.get("/pitch/deck")
+def pitch_deck():
+    stored = pitch_file()
+    if not stored:
+        raise HTTPException(404, "No pitch deck is stored.")
+    return FileResponse(
+        stored,
+        media_type="application/pdf",
+        content_disposition_type="inline",
+        filename=pitch_filename() or "deck.pdf",
+    )
+
+
+@app.post("/settings/pitch")
+async def save_pitch(pitch_pdf: UploadFile | None = File(None)):
+    if not pitch_pdf or not pitch_pdf.filename:
+        return _redirect("/settings", "Choose a PDF to upload.", "alert")
+    try:
+        save_pitch_file(pitch_pdf.filename, await pitch_pdf.read())
+    except ValueError as exc:
+        return _redirect("/settings", str(exc), "error")
+    return _redirect("/settings", "Pitch deck saved.")
 
 
 @app.post("/sources/imap")

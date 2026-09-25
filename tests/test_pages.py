@@ -12,6 +12,7 @@ from app.db import (
     upsert_message,
 )
 from app.main import app
+from app.pipeline.pitch import pitch_file
 
 
 def test_pages_render():
@@ -125,3 +126,38 @@ def test_source_message_for_finding():
     assert body["from"] == "bank@example.com"
     assert "CH00" in body["body"]
     assert body["subject"] == "Your statement"
+
+
+def test_pitch_upload_and_page():
+    init_db()
+    client = TestClient(app)
+    empty = client.get("/pitch")
+    assert empty.status_code == 200
+    assert "Pitch" in empty.text
+    assert "No pitch deck yet" in empty.text
+    missing = client.get("/pitch/deck")
+    assert missing.status_code == 404
+    rejected = client.post(
+        "/settings/pitch",
+        files={"pitch_pdf": ("note.txt", b"hello", "text/plain")},
+        follow_redirects=False,
+    )
+    assert rejected.status_code == 303
+    assert "Upload%20a%20PDF" in rejected.headers["location"]
+    saved = client.post(
+        "/settings/pitch",
+        files={"pitch_pdf": ("Investor deck.pdf", b"%PDF-1.4 pitch", "application/pdf")},
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    stored = pitch_file()
+    assert stored is not None
+    assert stored.read_bytes().startswith(b"%PDF")
+    page = client.get("/pitch")
+    assert "Present fullscreen" in page.text
+    assert "Investor deck.pdf" in page.text
+    deck = client.get("/pitch/deck")
+    assert deck.status_code == 200
+    assert deck.content.startswith(b"%PDF")
+    settings = client.get("/settings")
+    assert "Investor deck.pdf" in settings.text

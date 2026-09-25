@@ -846,6 +846,92 @@ function bindCaseViewer() {
   });
 }
 
+function bindPitch() {
+  const button = document.getElementById("pitch-fullscreen");
+  const stage = document.getElementById("pitch-stage");
+  const canvas = document.getElementById("pitch-canvas");
+  const host = document.getElementById("pdf-pages");
+  if (!button || !stage || !canvas || !host || !host.dataset.src || !window.pdfjsLib) return;
+  let pdf = null;
+  let pageNumber = 1;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/pdf.worker.min.js";
+  const loading = pdfjsLib.getDocument(host.dataset.src).promise;
+
+  async function draw() {
+    if (!pdf) pdf = await loading;
+    const page = await pdf.getPage(pageNumber);
+    const slide = canvas.parentElement.getBoundingClientRect();
+    const width = Math.max(slide.width - 32, 320);
+    const height = Math.max(slide.height - 32, 240);
+    const base = page.getViewport({ scale: 1 });
+    const pixelRatio = window.devicePixelRatio || 1;
+    const viewport = page.getViewport({ scale: Math.min(width / base.width, height / base.height) * pixelRatio });
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    canvas.style.width = (viewport.width / pixelRatio) + "px";
+    canvas.style.height = (viewport.height / pixelRatio) + "px";
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    const count = document.getElementById("pitch-count");
+    if (count) count.textContent = pageNumber + " / " + pdf.numPages;
+  }
+
+  async function show(delta) {
+    if (!pdf) pdf = await loading;
+    pageNumber = Math.min(pdf.numPages, Math.max(1, pageNumber + delta));
+    await draw();
+  }
+
+  function closeStage() {
+    stage.classList.remove("is-open");
+    stage.hidden = true;
+  }
+
+  button.addEventListener("click", async () => {
+    stage.hidden = false;
+    stage.classList.add("is-open");
+    try {
+      await stage.requestFullscreen();
+    } catch (error) {
+      /* CSS overlay still covers the screen when fullscreen is blocked. */
+    }
+    await show(0);
+  });
+  document.getElementById("pitch-prev").addEventListener("click", () => show(-1));
+  document.getElementById("pitch-next").addEventListener("click", () => show(1));
+  document.getElementById("pitch-exit").addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else closeStage();
+  });
+  document.addEventListener("fullscreenchange", () => {
+    if (document.fullscreenElement) draw();
+    else closeStage();
+  });
+  window.addEventListener("resize", () => {
+    if (!stage.hidden) draw();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (stage.hidden) return;
+    if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+      event.preventDefault();
+      show(1);
+    } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
+      event.preventDefault();
+      show(-1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      pageNumber = 1;
+      draw();
+    } else if (event.key === "End" && pdf) {
+      event.preventDefault();
+      pageNumber = pdf.numPages;
+      draw();
+    } else if (event.key === "Escape" && !document.fullscreenElement) {
+      closeStage();
+    }
+  });
+}
+
+bindPitch();
 bindCaseViewer();
 bindReplyStatus();
 bindCredentials();

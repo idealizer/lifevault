@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Pitch — Lifevault{% endblock %}
+{% block content %}
+<section class="vault-head">
+  <div>
+    <p class="kicker">Deck</p>
+    <h1>Pitch</h1>
+    {% if has_pitch %}<p class="muted">{{ pitch_name }}. Arrow keys move between pages in fullscreen.</p>{% endif %}
+  </div>
+  {% if has_pitch %}
+  <button type="button" class="btn primary" id="pitch-fullscreen" aria-label="Present fullscreen">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
+    Present
+  </button>
+  {% endif %}
+</section>
+{% if has_pitch %}
+<div id="pdf-pages" class="pdf-pages" data-src="/pitch/deck"></div>
+<div id="pitch-stage" class="pitch-stage" hidden>
+  <div class="pitch-slide">
+    <canvas id="pitch-canvas"></canvas>
+  </div>
+  <div class="pitch-bar">
+    <button type="button" class="btn icon" id="pitch-prev" aria-label="Previous page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <span id="pitch-count" class="pill">1 / 1</span>
+    <button type="button" class="btn icon" id="pitch-next" aria-label="Next page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <button type="button" class="btn icon" id="pitch-exit" aria-label="Exit fullscreen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+</div>
+<script src="/static/pdf.min.js"></script>
+{% else %}
+<section class="panel">
+  <p>No pitch deck yet. Upload a PDF in <a href="/settings">Settings</a>.</p>
+</section>
+{% endif %}
+{% endblock %}
